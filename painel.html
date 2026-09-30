@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel · Vale refeição</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="comum.css">
+<style>
+.tabela{width:100%;border-collapse:collapse;font-size:14px}
+.tabela th,.tabela td{text-align:left;padding:8px 6px;border-top:1px solid var(--linha);vertical-align:top}
+.tabela th{font-size:12px;font-weight:700;color:var(--cinza);border-top:none}
+.tabela td.n,.tabela th.n{text-align:right;font-variant-numeric:tabular-nums}
+.tabela tr.clic{cursor:pointer}
+.tabela tr.clic:hover td{background:var(--papel)}
+.periodo{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.periodo > div{flex:1;min-width:130px}
+.periodo label{margin-top:0}
+.qr-box{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:10px 0 4px}
+.qr-box .qr{background:#fff;padding:8px;border:1px solid var(--linha);border-radius:8px}
+.qr-box .qr img,.qr-box .qr canvas{display:block}
+.qr-box .lk{flex:1;min-width:220px;font-size:13px;color:var(--cinza);overflow-wrap:anywhere}
+.qr-box .lk code{display:block;background:var(--papel);padding:8px;border-radius:6px;margin:6px 0 10px;font-size:12px;color:var(--tinta)}
+.sup-off{opacity:.6}
+.zap{background:#25D366;color:#fff}
+.dia-lista{padding:0 0 8px 12px}
+.dia-lista .linha{padding:6px 0}
+</style>
+</head>
+<body>
+<header id="topo"><h1>Vale refeição</h1><span class="emp"></span></header>
+<main class="larga" id="app"><p class="msg">Carregando…</p></main>
+<script src="comum.js"></script>
+<script src="qrcode.min.js"></script>
+<script>
+var app = document.getElementById('app');
+var EST = null, D = null;
+var VIEW = lerLS('vr_view') || 'uber';
+var BUSCA = '', ABERTO = null, EDIT = null, QR_ABERTO = null;
+var REL = { de: '', ate: '', dados: null, diaAberto: null };
+
+var ABAS = [
+  ['uber', 'Uber e Taxistas'], ['guia', 'Guias e Motoristas'], ['prefeitura', 'Prefeitura'],
+  ['veiculos', 'Marketing de Veículo'], ['renovacoes', 'Renovações'], ['almocos', 'Almoços'], ['supervisores', 'Supervisores']
+];
+
+function topo(){
+  var h = '<h1>Vale refeição</h1>';
+  if (SESSAO.pin) h += '<span class="tag">Painel</span>';
+  h += '<span class="emp">' + esc(EST ? EST.empresa : '') + '</span>';
+  if (SESSAO.pin) h += '<a class="link" href="caixa.html">Caixa</a> <button id="bt-sair">Sair</button>';
+  document.getElementById('topo').innerHTML = h;
+  var s = document.getElementById('bt-sair'); if (s) s.onclick = sair;
+}
+window.aoPerderSessao = function(){ D = null; topo(); telaPin(app, EST, ['supervisor'], 'PIN incorreto ou trocado. Digite de novo.', carregar); };
+
+function boot(){
+  apiPub('/estado').then(function(e){
+    EST = e; topo();
+    if (sessaoGuardada(['supervisor'])) carregar();
+    else telaPin(app, EST, ['supervisor'], '', carregar);
+  }).catch(function(){ app.innerHTML = '<p class="erro">Não consegui carregar. Verifique a conexão e recarregue a página.</p>'; });
+}
+
+function carregar(){
+  return apiAuth('/painel').then(function(d){ D = d; render(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+}
+
+function supNome(id){
+  if (!D || !id) return '';
+  for (var i = 0; i < D.supervisores.length; i++) if (D.supervisores[i].id === id) return D.supervisores[i].nome;
+  return '';
+}
+function baseSite(){ return location.href.replace(/[#?].*$/, '').replace(/painel\.html$/, ''); }
+function linkSup(cod){ return baseSite() + '?s=' + cod; }
+function msgZap(v){
+  return 'Olá, ' + v.nome.split(' ')[0] + '! Aqui é da Cabana Tôa Tôa. O adesivo do seu veículo ' + fmtPlaca(v.placa)
+    + (v.dias < 0 ? ' venceu em ' : ' vence em ') + dBr(v.vencimento)
+    + '. Para continuar com o almoço, é preciso renovar o adesivo e registrar de novo com o supervisor. Qualquer dúvida, fale com a gente.';
+}
+
+// ------------------------------------------------------------- render ---
+function contagens(){
+  var c = { ativos: 0, pendentes: 0, renovacao: 0, vencendo: 0, inativos: 0 };
+  for (var i = 0; i < D.parceiros.length; i++) {
+    var p = D.parceiros[i];
+    if (p.status === 'ativo') c.ativos++; else if (p.status === 'pendente') c.pendentes++; else if (p.status === 'renovacao') c.renovacao++; else c.inativos++;
+  }
+  for (var j = 0; j < D.veiculos.length; j++) if (D.veiculos[j].situacao === 'vencendo') c.vencendo++;
+  return c;
+}
+
+function render(){
+  topo();
+  var c = contagens();
+  var h = '<div class="numeros">'
+    + '<div class="num"><b>' + c.ativos + '</b><span>ativos no vale</span></div>'
+    + '<div class="num' + (c.vencendo ? ' aviso' : '') + '"><b>' + c.vencendo + '</b><span>vencendo em ' + D.aviso_dias + ' dias</span></div>'
+    + '<div class="num' + (c.renovacao ? ' alerta' : '') + '"><b>' + c.renovacao + '</b><span>precisam renovar</span></div>'
+    + '<div class="num' + (c.pendentes ? ' aviso' : '') + '"><b>' + c.pendentes + '</b><span>pendentes</span></div>'
+    + '<div class="num"><b>' + D.almocos_hoje + '</b><span>almoços hoje</span></div></div>';
+  h += '<div class="abas">';
+  for (var i = 0; i < ABAS.length; i++) h += '<button class="aba' + (VIEW === ABAS[i][0] ? ' on' : '') + '" data-view="' + ABAS[i][0] + '">' + ABAS[i][1] + ' <span class="n">' + contaAba(ABAS[i][0]) + '</span></button>';
+  h += '</div><div id="conteudo"></div>';
+  app.innerHTML = h;
+  var vs = app.querySelectorAll('[data-view]');
+  for (var k = 0; k < vs.length; k++) vs[k].onclick = function(){ VIEW = this.getAttribute('data-view'); gravarLS('vr_view', VIEW); ABERTO = null; EDIT = null; BUSCA = ''; render(); };
+  renderConteudo();
+}
+
+function contaAba(v){
+  if (!D) return '';
+  var n = 0, i;
+  if (v === 'uber') { for (i = 0; i < D.parceiros.length; i++) if (COM_ADESIVO[D.parceiros[i].categoria]) n++; return n; }
+  if (v === 'guia') { for (i = 0; i < D.parceiros.length; i++) if (D.parceiros[i].categoria === 'guia' || D.parceiros[i].categoria === 'motorista') n++; return n; }
+  if (v === 'prefeitura') { for (i = 0; i < D.parceiros.length; i++) if (D.parceiros[i].categoria === 'prefeitura') n++; return n; }
+  if (v === 'veiculos') return D.veiculos.length;
+  if (v === 'renovacoes') { for (i = 0; i < D.veiculos.length; i++) if (D.veiculos[i].situacao !== 'ativo') n++; return n; }
+  if (v === 'supervisores') return D.supervisores.length;
+  return '';
+}
+
+function renderConteudo(){
+  var box = document.getElementById('conteudo');
+  if (VIEW === 'veiculos') box.innerHTML = htmlVeiculos();
+  else if (VIEW === 'renovacoes') box.innerHTML = htmlRenovacoes();
+  else if (VIEW === 'almocos') box.innerHTML = htmlAlmocos();
+  else if (VIEW === 'supervisores') box.innerHTML = htmlSupervisores();
+  else box.innerHTML = htmlParceiros();
+  ligar();
+}
+
+// ---------------------------------------------------------- parceiros ---
+function filtraBusca(lista, campos){
+  var termos = norm(BUSCA).split(/\s+/).filter(Boolean);
+  if (!termos.length) return lista;
+  return lista.filter(function(p){
+    var alvo = norm(campos.map(function(c){ return p[c] || ''; }).join(' '));
+    for (var t = 0; t < termos.length; t++) if (alvo.indexOf(termos[t]) < 0) return false;
+    return true;
+  });
+}
+
+function htmlParceiros(){
+  var cats = VIEW === 'uber' ? ['uber', 'taxista'] : VIEW === 'guia' ? ['guia', 'motorista'] : ['prefeitura'];
+  var h = '<div class="caixa"><div class="filtro"><input type="search" id="p-busca" placeholder="Buscar por nome, telefone, placa ou empresa" value="' + esc(BUSCA) + '" aria-label="Buscar"></div>';
+  if (VIEW === 'uber') {
+    h += '<p class="msg" style="margin-top:0">Uber e taxista só ficam ativos com o adesivo registrado no Marketing de Veículo para o mesmo telefone e placa. O status aqui é calculado, não digitado.</p>';
+    h += blocoParceiros(cats, null);
+  } else if (VIEW === 'guia') {
+    h += blocoParceiros(['guia'], 'Guias');
+    h += blocoParceiros(['motorista'], 'Motoristas');
+  } else {
+    h += blocoParceiros(['prefeitura'], null);
+  }
+  return h + '</div>';
+}
+
+function blocoParceiros(cats, titulo){
+  var lista = D.parceiros.filter(function(p){ return cats.indexOf(p.categoria) >= 0; });
+  var vis = filtraBusca(lista, ['nome', 'telefone', 'placa', 'empresa', 'setor']);
+  var h = titulo ? '<div class="bloco-tit">' + titulo + ' (' + lista.length + ')</div>' : '';
+  if (!lista.length) return h + '<div class="vazio"><b>Ninguém cadastrado ainda</b><span class="msg">Os cadastros feitos pelo QR do supervisor aparecem aqui na hora.</span></div>';
+  if (!vis.length) return h + '<div class="vazio"><span class="msg">Nada com essa busca.</span></div>';
+  for (var i = 0; i < vis.length; i++) {
+    var p = vis[i];
+    var sub = esc(fmtTel(p.telefone)) + (p.placa ? ' · ' + esc(fmtPlaca(p.placa)) : '') + (p.setor ? ' · ' + esc(p.setor) : '') + (p.empresa ? ' · ' + esc(p.empresa) : '')
+      + (p.vencimento ? ' · adesivo até ' + dBr(p.vencimento) : '');
+    h += '<div class="linha clic" data-abrir="' + p.id + '" role="button" tabindex="0" aria-expanded="' + (ABERTO === p.id) + '">'
+      + '<div class="txt"><div class="tit">' + esc(p.nome) + '</div><div class="sub">' + sub + '</div></div>'
+      + (cats.length > 1 ? pillCat(p.categoria) : '') + pillStatus(p.status) + '<span class="chev">' + (ABERTO === p.id ? '▴' : '▾') + '</span></div>';
+    if (ABERTO === p.id) h += detalheParceiro(p);
+  }
+  return h;
+}
+
+function detalheParceiro(p){
+  var h = '<div class="detalhe">';
+  h += '<p class="msg">Cadastrado em ' + dataBRdeTs(p.criado_em) + (supNome(p.supervisor_id) ? ' pelo supervisor ' + esc(supNome(p.supervisor_id)) : '') + (p.atualizado_em !== p.criado_em ? ' · alterado em ' + dataBRdeTs(p.atualizado_em) : '') + '</p>';
+  if (COM_ADESIVO[p.categoria]) {
+    if (p.status === 'pendente') {
+      h += '<p class="erro">Sem adesivo registrado para este telefone + placa.' + (p.outra_placa ? ' Há um veículo com este telefone e placa <b>' + esc(fmtPlaca(p.outra_placa)) + '</b> — se for o mesmo carro, corrija a placa abaixo.' : ' Peça para registrar o adesivo pelo QR do supervisor.') + '</p>';
+    } else if (p.vencimento) {
+      h += '<p class="msg">Adesivo aplicado/renovado em ' + dBr(p.adesivo_em) + ' · vence em ' + dBr(p.vencimento) + ' (' + textoVenc(p.dias) + ').' + (p.status === 'renovacao' ? ' <b style="color:var(--verm)">Precisa renovar.</b>' : '') + '</p>';
+    }
+  }
+  if (EDIT === p.id) {
+    h += '<div class="grade">'
+      + '<div class="cheio"><label for="e-nome">Nome</label><input type="text" id="e-nome" value="' + esc(p.nome) + '"></div>'
+      + '<div><label for="e-tel">Telefone</label><input type="tel" id="e-tel" value="' + esc(fmtTel(p.telefone)) + '"></div>'
+      + '<div><label for="e-cat">Categoria</label><select id="e-cat">' + ['guia', 'motorista', 'uber', 'taxista', 'prefeitura'].map(function(c){ return '<option value="' + c + '"' + (c === p.categoria ? ' selected' : '') + '>' + CATEGORIAS[c] + '</option>'; }).join('') + '</select></div>'
+      + '<div><label for="e-emp">Empresa (opcional)</label><input type="text" id="e-emp" value="' + esc(p.empresa || '') + '"></div>'
+      + '<div id="e-extra"></div></div>'
+      + '<div class="acoes"><button class="bt-mar bt-mini" data-salvar="' + p.id + '">Salvar</button><button class="bt-cinza bt-mini" data-cancelar="1">Cancelar</button></div>';
+  } else {
+    h += '<div class="acoes">';
+    if (!COM_ADESIVO[p.categoria]) h += p.status_manual === 'ativo'
+      ? '<button class="bt-verm bt-mini" data-status="inativo" data-id="' + p.id + '">Inativar</button>'
+      : '<button class="bt-verde bt-mini" data-status="ativo" data-id="' + p.id + '">Ativar</button>';
+    h += '<button class="bt-cinza bt-mini" data-editar="' + p.id + '">Corrigir dados</button>'
+      + '<a class="bt-mini bt-cinza" style="text-decoration:none" href="' + linkZap(p.telefone) + '" target="_blank" rel="noopener">WhatsApp</a>'
+      + '<button class="bt-link bt-mini" data-excluir="' + p.id + '">Excluir cadastro</button></div>';
+  }
+  return h + '</div>';
+}
+
+function extraEdicao(cat, p){
+  var ex = document.getElementById('e-extra'); if (!ex) return;
+  if (cat === 'prefeitura') ex.innerHTML = '<label for="e-setor">Setor na prefeitura</label><input type="text" id="e-setor" value="' + esc(p.setor || '') + '">';
+  else if (COM_ADESIVO[cat]) { ex.innerHTML = '<label for="e-placa">Placa</label><input type="text" id="e-placa" value="' + esc(fmtPlaca(p.placa || '')) + '">'; mascaraPlaca(document.getElementById('e-placa')); }
+  else ex.innerHTML = '';
+}
+
+// ----------------------------------------------------------- veículos ---
+function htmlVeiculos(){
+  var vis = filtraBusca(D.veiculos, ['nome', 'telefone', 'placa', 'modelo']);
+  var h = '<div class="caixa"><div class="filtro"><input type="search" id="p-busca" placeholder="Buscar por nome, placa, telefone ou modelo" value="' + esc(BUSCA) + '" aria-label="Buscar"></div>'
+    + '<p class="msg" style="margin-top:0">Cada veículo vale por ' + D.meses + ' meses a partir da data do adesivo. Para registrar ou renovar, o motorista usa o QR do supervisor (aba Supervisores) e envia a foto; a data do adesivo só muda por aí.</p>';
+  if (!D.veiculos.length) h += '<div class="vazio"><b>Nenhum veículo registrado ainda</b><span class="msg">Os registros feitos pelo formulário do adesivo aparecem aqui na hora.</span></div>';
+  else if (!vis.length) h += '<div class="vazio"><span class="msg">Nada com essa busca.</span></div>';
+  for (var i = 0; i < vis.length; i++) {
+    var v = vis[i];
+    h += '<div class="linha clic" data-abrirv="' + v.id + '" role="button" tabindex="0" aria-expanded="' + (ABERTO === v.id) + '">'
+      + (v.foto_url ? '<img class="foto-mini" src="' + esc(v.foto_url) + '" alt="" loading="lazy">' : '<div class="foto-mini"></div>')
+      + '<div class="txt"><div class="tit">' + esc(v.nome) + ' · ' + esc(fmtPlaca(v.placa)) + '</div>'
+      + '<div class="sub">' + esc(v.modelo) + ' · ' + esc(fmtTel(v.telefone)) + ' · adesivo ' + dBr(v.adesivo_em) + ' → vence ' + dBr(v.vencimento) + '</div></div>'
+      + pillStatus(v.situacao) + '<span class="chev">' + (ABERTO === v.id ? '▴' : '▾') + '</span></div>';
+    if (ABERTO === v.id) h += detalheVeiculo(v);
+  }
+  return h + '</div>';
+}
+
+function detalheVeiculo(v){
+  var h = '<div class="detalhe">';
+  if (v.foto_url) h += '<a href="' + esc(v.foto_url) + '" target="_blank" rel="noopener"><img class="foto-grande" src="' + esc(v.foto_url) + '" alt="Foto do veículo com o adesivo" style="max-height:340px;margin:8px 0"></a>';
+  h += '<p class="msg">' + esc(textoVenc(v.dias).replace(/^./, function(c){ return c.toUpperCase(); })) + ' (' + dBr(v.vencimento) + ').'
+    + (supNome(v.supervisor_id) ? ' Último registro pelo supervisor ' + esc(supNome(v.supervisor_id)) + '.' : '') + '</p>';
+  if (v.parceiro) h += '<p class="msg">Vale: <b>' + esc(v.parceiro.nome) + '</b> (' + esc(CATEGORIAS[v.parceiro.categoria] || v.parceiro.categoria) + ')' + (v.parceiro.status_manual === 'inativo' ? ' · <span style="color:var(--verm)">inativado pelo supervisor</span>' : '') + '</p>';
+  else if (v.parceiro_outra_placa) h += '<p class="erro">Existe cadastro do vale com este telefone, mas com a placa ' + esc(fmtPlaca(v.parceiro_outra_placa.placa)) + ' (' + esc(v.parceiro_outra_placa.nome) + '). Corrija a placa em um dos dois para o vale ficar ativo.</p>';
+  else h += '<p class="erro">Ainda sem cadastro do vale com este telefone e placa. O motorista precisa fazer o cadastro pelo QR do supervisor.</p>';
+  if (v.historico && v.historico.length) {
+    h += '<div class="hist"><b>Histórico do adesivo</b>';
+    for (var i = 0; i < v.historico.length; i++) {
+      var x = v.historico[i];
+      h += '<div>' + (x.tipo === 'aplicacao' ? 'Aplicação' : 'Renovação') + ' em ' + dBr(x.data) + (supNome(x.supervisor_id) ? ' · ' + esc(supNome(x.supervisor_id)) : '') + (x.foto_url ? ' · <a href="' + esc(x.foto_url) + '" target="_blank" rel="noopener">foto</a>' : '') + '</div>';
+    }
+    h += '</div>';
+  }
+  if (EDIT === v.id) {
+    h += '<div class="grade">'
+      + '<div class="cheio"><label for="e-nome">Nome</label><input type="text" id="e-nome" value="' + esc(v.nome) + '"></div>'
+      + '<div><label for="e-tel">Telefone</label><input type="tel" id="e-tel" value="' + esc(fmtTel(v.telefone)) + '"></div>'
+      + '<div><label for="e-placa">Placa</label><input type="text" id="e-placa" value="' + esc(fmtPlaca(v.placa)) + '"></div>'
+      + '<div class="cheio"><label for="e-modelo">Modelo</label><input type="text" id="e-modelo" value="' + esc(v.modelo) + '"></div></div>'
+      + '<p class="dica">A data do adesivo não é editada aqui: ela só muda quando o motorista registra uma aplicação ou renovação com foto.</p>'
+      + '<div class="acoes"><button class="bt-mar bt-mini" data-salvarv="' + v.id + '">Salvar</button><button class="bt-cinza bt-mini" data-cancelar="1">Cancelar</button></div>';
+  } else {
+    h += '<div class="acoes">'
+      + (v.situacao !== 'ativo' ? '<a class="bt-mini zap" style="text-decoration:none" href="' + linkZap(v.telefone, msgZap(v)) + '" target="_blank" rel="noopener">Avisar no WhatsApp</a>' : '<a class="bt-mini bt-cinza" style="text-decoration:none" href="' + linkZap(v.telefone) + '" target="_blank" rel="noopener">WhatsApp</a>')
+      + '<button class="bt-cinza bt-mini" data-editarv="' + v.id + '">Corrigir dados</button>'
+      + '<button class="bt-link bt-mini" data-excluirv="' + v.id + '">Excluir veículo</button></div>';
+  }
+  return h + '</div>';
+}
+
+// --------------------------------------------------------- renovações ---
+function htmlRenovacoes(){
+  var vencidos = D.veiculos.filter(function(v){ return v.situacao === 'vencido'; }).sort(function(a, b){ return a.dias - b.dias; });
+  var vencendo = D.veiculos.filter(function(v){ return v.situacao === 'vencendo'; }).sort(function(a, b){ return a.dias - b.dias; });
+  var h = '<div class="caixa"><p class="msg" style="margin-top:0">O aviso vai pelo WhatsApp do próprio motorista, com a mensagem pronta. No vencimento o almoço bloqueia sozinho; volta quando ele renovar o adesivo e registrar de novo.</p>';
+  h += '<div class="bloco-tit">Vencidos — precisam renovar (' + vencidos.length + ')</div>';
+  h += vencidos.length ? linhasRenov(vencidos) : '<p class="msg">Nenhum adesivo vencido.</p>';
+  h += '<div class="bloco-tit">Vencendo em até ' + D.aviso_dias + ' dias (' + vencendo.length + ')</div>';
+  h += vencendo.length ? linhasRenov(vencendo) : '<p class="msg">Nenhum adesivo vencendo nos próximos ' + D.aviso_dias + ' dias.</p>';
+  return h + '</div>';
+}
+function linhasRenov(lista){
+  var h = '';
+  for (var i = 0; i < lista.length; i++) {
+    var v = lista[i];
+    h += '<div class="linha"><div class="txt"><div class="tit">' + esc(v.nome) + ' · ' + esc(fmtPlaca(v.placa)) + '</div>'
+      + '<div class="sub">' + esc(textoVenc(v.dias)) + ' (' + dBr(v.vencimento) + ') · ' + esc(fmtTel(v.telefone)) + (v.parceiro ? '' : ' · sem cadastro do vale') + '</div></div>'
+      + '<a class="bt-mini zap" style="text-decoration:none" href="' + linkZap(v.telefone, msgZap(v)) + '" target="_blank" rel="noopener">Avisar</a></div>';
+  }
+  return h;
+}
+
+// ------------------------------------------------------------ almoços ---
+function htmlAlmocos(){
+  if (!REL.de) { var hj = D.hoje; REL.de = hj.slice(0, 8) + '01'; REL.ate = hj; }
+  var h = '<div class="caixa"><div class="periodo">'
+    + '<div><label for="r-de">De</label><input type="date" id="r-de" value="' + esc(REL.de) + '"></div>'
+    + '<div><label for="r-ate">Até</label><input type="date" id="r-ate" value="' + esc(REL.ate) + '"></div>'
+    + '<button class="bt-mar" id="r-ok">Ver almoços</button>'
+    + (REL.dados && REL.dados.almocos.length ? '<button class="bt-cinza" id="r-csv">Baixar CSV</button>' : '') + '</div>'
+    + '<p class="msg">Conta só o que o caixa liberou: quem tem cadastro e não almoçou não entra.</p>';
+  if (REL.dados) {
+    var a = REL.dados.almocos;
+    if (!a.length) h += '<div class="vazio"><span class="msg">Nenhum almoço liberado no período.</span></div>';
+    else {
+      var porCat = {}, porDia = {}, dias = [];
+      for (var i = 0; i < a.length; i++) {
+        porCat[a[i].categoria] = (porCat[a[i].categoria] || 0) + 1;
+        if (!porDia[a[i].data]) { porDia[a[i].data] = { total: 0, cats: {}, lista: [] }; dias.push(a[i].data); }
+        porDia[a[i].data].total++; porDia[a[i].data].cats[a[i].categoria] = (porDia[a[i].data].cats[a[i].categoria] || 0) + 1; porDia[a[i].data].lista.push(a[i]);
+      }
+      h += '<div class="numeros" style="margin-top:14px"><div class="num"><b>' + a.length + '</b><span>almoços no período</span></div>';
+      var cs = ['uber', 'taxista', 'guia', 'motorista', 'prefeitura'];
+      for (var c = 0; c < cs.length; c++) if (porCat[cs[c]]) h += '<div class="num"><b>' + porCat[cs[c]] + '</b><span>' + CATEGORIAS[cs[c]] + '</span></div>';
+      h += '</div><table class="tabela"><thead><tr><th>Dia</th><th class="n">Total</th><th>Por categoria</th></tr></thead><tbody>';
+      for (var d = 0; d < dias.length; d++) {
+        var dia = porDia[dias[d]], partes = [];
+        for (var k = 0; k < cs.length; k++) if (dia.cats[cs[k]]) partes.push(dia.cats[cs[k]] + ' ' + CATEGORIAS[cs[k]]);
+        h += '<tr class="clic" data-dia="' + dias[d] + '"><td>' + dBr(dias[d]) + ' ' + (REL.diaAberto === dias[d] ? '▴' : '▾') + '</td><td class="n"><b>' + dia.total + '</b></td><td>' + esc(partes.join(' · ')) + '</td></tr>';
+        if (REL.diaAberto === dias[d]) {
+          h += '<tr><td colspan="3"><div class="dia-lista">';
+          for (var m = 0; m < dia.lista.length; m++) h += '<div class="linha"><div class="txt"><div class="tit" style="font-size:14px">' + esc(dia.lista[m].nome) + '</div><div class="sub">' + esc(CATEGORIAS[dia.lista[m].categoria] || dia.lista[m].categoria) + ' · ' + horaBR(dia.lista[m].hora) + '</div></div></div>';
+          h += '</div></td></tr>';
+        }
+      }
+      h += '</tbody></table>';
+    }
+  }
+  return h + '</div>';
+}
+function buscarRelatorio(){
+  REL.de = document.getElementById('r-de').value; REL.ate = document.getElementById('r-ate').value;
+  if (!REL.de || !REL.ate) { toast('Escolha o período.'); return; }
+  apiAuth('/almocos?de=' + REL.de + '&ate=' + REL.ate).then(function(d){ REL.dados = d; REL.diaAberto = null; renderConteudo(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+}
+function baixarCsv(){
+  var a = REL.dados.almocos, l = ['data;hora;nome;categoria'];
+  for (var i = a.length - 1; i >= 0; i--) l.push(dBr(a[i].data) + ';' + horaBR(a[i].hora) + ';"' + a[i].nome.replace(/"/g, '""') + '";' + (CATEGORIAS[a[i].categoria] || a[i].categoria));
+  var blob = new Blob(['﻿' + l.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  var u = URL.createObjectURL(blob), el = document.createElement('a');
+  el.href = u; el.download = 'almocos-' + REL.de + '-a-' + REL.ate + '.csv'; document.body.appendChild(el); el.click(); el.remove();
+  setTimeout(function(){ URL.revokeObjectURL(u); }, 2000);
+}
+
+// -------------------------------------------------------- supervisores ---
+function htmlSupervisores(){
+  var h = '<div class="caixa"><p class="msg" style="margin-top:0">Cada supervisor tem o seu QR. Quem se cadastra por ele fica registrado como autorizado por esse supervisor. Imprima o QR ou guarde o link no celular.</p>'
+    + '<div class="filtro"><input type="text" id="s-nome" placeholder="Nome do supervisor" aria-label="Nome do novo supervisor"><button class="bt-mar" id="s-add">Adicionar supervisor</button></div>';
+  if (!D.supervisores.length) h += '<div class="vazio"><b>Nenhum supervisor ainda</b><span class="msg">Adicione o primeiro para gerar o QR de cadastro.</span></div>';
+  for (var i = 0; i < D.supervisores.length; i++) {
+    var s = D.supervisores[i];
+    h += '<div class="linha' + (s.ativo ? '' : ' sup-off') + '"><div class="txt"><div class="tit">' + esc(s.nome) + '</div><div class="sub">código ' + esc(s.codigo) + (s.ativo ? '' : ' · desativado: o QR não funciona') + '</div></div>'
+      + '<button class="bt-cinza bt-mini" data-qr="' + s.id + '">' + (QR_ABERTO === s.id ? 'Fechar QR' : 'Ver QR e link') + '</button>'
+      + '<button class="bt-link bt-mini" data-supativo="' + s.id + '" data-valor="' + (s.ativo ? '0' : '1') + '">' + (s.ativo ? 'Desativar' : 'Reativar') + '</button></div>';
+    if (QR_ABERTO === s.id) {
+      var lk = linkSup(s.codigo);
+      h += '<div class="qr-box"><div class="qr" id="qr-' + s.id + '"></div><div class="lk">Link do supervisor ' + esc(s.nome) + ':<code>' + esc(lk) + '</code>'
+        + '<div class="acoes" style="margin-top:0"><button class="bt-mar bt-mini" data-copiar="' + esc(lk) + '">Copiar link</button><button class="bt-cinza bt-mini" data-baixar="' + s.id + '" data-nome="' + esc(s.nome) + '">Baixar QR (PNG)</button></div></div></div>';
+    }
+  }
+  return h + '</div>';
+}
+
+// ----------------------------------------------------------------- ligar ---
+function ligar(){
+  var box = document.getElementById('conteudo');
+  var b = document.getElementById('p-busca');
+  if (b) b.oninput = function(){ BUSCA = this.value; ABERTO = null; EDIT = null; var pos = this.selectionStart; renderConteudo(); var nb = document.getElementById('p-busca'); nb.focus(); nb.setSelectionRange(pos, pos); };
+
+  var alternar = function(attr){ return function(){ var id = this.getAttribute(attr); ABERTO = ABERTO === id ? null : id; EDIT = null; renderConteudo(); }; };
+  var ls = box.querySelectorAll('[data-abrir]');
+  for (var i = 0; i < ls.length; i++) { ls[i].onclick = alternar('data-abrir'); ls[i].onkeydown = teclaAbre('data-abrir'); }
+  var lv = box.querySelectorAll('[data-abrirv]');
+  for (var j = 0; j < lv.length; j++) { lv[j].onclick = alternar('data-abrirv'); lv[j].onkeydown = teclaAbre('data-abrirv'); }
+
+  // parceiros
+  var st = box.querySelectorAll('[data-status]');
+  for (var k = 0; k < st.length; k++) st[k].onclick = function(){
+    var id = this.getAttribute('data-id'), s = this.getAttribute('data-status');
+    apiAuth('/parceiros/' + id + '/status', { method: 'POST', body: { status: s } }).then(function(){ toast(s === 'ativo' ? 'Cadastro ativado.' : 'Cadastro inativado.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+  };
+  var ed = box.querySelector('[data-editar]');
+  if (ed) ed.onclick = function(){ EDIT = this.getAttribute('data-editar'); renderConteudo(); };
+  var edv = box.querySelector('[data-editarv]');
+  if (edv) edv.onclick = function(){ EDIT = this.getAttribute('data-editarv'); renderConteudo(); };
+  var cc = box.querySelector('[data-cancelar]');
+  if (cc) cc.onclick = function(){ EDIT = null; renderConteudo(); };
+  var sv = box.querySelector('[data-salvar]');
+  if (sv) {
+    var p = acha(D.parceiros, EDIT);
+    var sel = document.getElementById('e-cat');
+    extraEdicao(sel.value, p);
+    sel.onchange = function(){ extraEdicao(this.value, p); };
+    mascaraTel(document.getElementById('e-tel'));
+    sv.onclick = function(){
+      var cat = sel.value;
+      var dados = { nome: document.getElementById('e-nome').value, telefone: document.getElementById('e-tel').value, categoria: cat, empresa: document.getElementById('e-emp').value,
+        setor: cat === 'prefeitura' ? document.getElementById('e-setor').value : '', placa: COM_ADESIVO[cat] ? document.getElementById('e-placa').value : '' };
+      sv.disabled = true;
+      apiAuth('/parceiros/' + p.id, { method: 'POST', body: dados }).then(function(){ EDIT = null; toast('Cadastro corrigido.'); carregar(); }).catch(function(e){ sv.disabled = false; if (e.message !== '401') toast(e.message); });
+    };
+  }
+  var svv = box.querySelector('[data-salvarv]');
+  if (svv) {
+    var v = acha(D.veiculos, EDIT);
+    mascaraTel(document.getElementById('e-tel')); mascaraPlaca(document.getElementById('e-placa'));
+    svv.onclick = function(){
+      var dados = { nome: document.getElementById('e-nome').value, telefone: document.getElementById('e-tel').value, placa: document.getElementById('e-placa').value, modelo: document.getElementById('e-modelo').value };
+      svv.disabled = true;
+      apiAuth('/veiculos/' + v.id, { method: 'POST', body: dados }).then(function(){ EDIT = null; toast('Veículo corrigido.'); carregar(); }).catch(function(e){ svv.disabled = false; if (e.message !== '401') toast(e.message); });
+    };
+  }
+  var ex = box.querySelector('[data-excluir]');
+  if (ex) ex.onclick = function(){
+    var p = acha(D.parceiros, this.getAttribute('data-excluir'));
+    if (!confirm('Excluir o cadastro de ' + p.nome + '? Ele sai do vale e só volta se fizer o cadastro de novo. Os almoços já liberados ficam no relatório.')) return;
+    apiAuth('/parceiros/' + p.id, { method: 'DELETE' }).then(function(){ ABERTO = null; toast('Cadastro excluído.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+  };
+  var exv = box.querySelector('[data-excluirv]');
+  if (exv) exv.onclick = function(){
+    var v = acha(D.veiculos, this.getAttribute('data-excluirv'));
+    if (!confirm('Excluir o veículo ' + fmtPlaca(v.placa) + ' de ' + v.nome + '? As fotos e o histórico do adesivo são apagados, e o vale dele fica pendente.')) return;
+    apiAuth('/veiculos/' + v.id, { method: 'DELETE' }).then(function(){ ABERTO = null; toast('Veículo excluído.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+  };
+
+  // almoços
+  var rok = document.getElementById('r-ok'); if (rok) rok.onclick = buscarRelatorio;
+  var rcsv = document.getElementById('r-csv'); if (rcsv) rcsv.onclick = baixarCsv;
+  var ds = box.querySelectorAll('[data-dia]');
+  for (var m = 0; m < ds.length; m++) ds[m].onclick = function(){ var d = this.getAttribute('data-dia'); REL.diaAberto = REL.diaAberto === d ? null : d; renderConteudo(); };
+
+  // supervisores
+  var sadd = document.getElementById('s-add');
+  if (sadd) sadd.onclick = function(){
+    var nome = document.getElementById('s-nome').value.trim();
+    if (nome.length < 2) { toast('Escreva o nome do supervisor.'); return; }
+    sadd.disabled = true;
+    apiAuth('/supervisores', { method: 'POST', body: { nome: nome } }).then(function(s){ QR_ABERTO = s.id; toast('Supervisor adicionado.'); carregar(); }).catch(function(e){ sadd.disabled = false; if (e.message !== '401') toast(e.message); });
+  };
+  var sn = document.getElementById('s-nome'); if (sn) sn.onkeydown = function(ev){ if (ev.key === 'Enter') sadd.click(); };
+  var qs = box.querySelectorAll('[data-qr]');
+  for (var q = 0; q < qs.length; q++) qs[q].onclick = function(){ var id = this.getAttribute('data-qr'); QR_ABERTO = QR_ABERTO === id ? null : id; renderConteudo(); };
+  var sa = box.querySelectorAll('[data-supativo]');
+  for (var r = 0; r < sa.length; r++) sa[r].onclick = function(){
+    var id = this.getAttribute('data-supativo'), ativo = this.getAttribute('data-valor') === '1';
+    if (!ativo && !confirm('Desativar este supervisor? O QR dele para de funcionar; os cadastros que ele já autorizou continuam.')) return;
+    apiAuth('/supervisores/' + id, { method: 'POST', body: { ativo: ativo } }).then(function(){ toast(ativo ? 'Supervisor reativado.' : 'Supervisor desativado.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+  };
+  if (QR_ABERTO) {
+    var s = acha(D.supervisores, QR_ABERTO), alvo = document.getElementById('qr-' + QR_ABERTO);
+    if (s && alvo) {
+      if (window.QRCode) new QRCode(alvo, { text: linkSup(s.codigo), width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+      else alvo.innerHTML = '<p class="msg">Não consegui gerar o QR. Use o link ao lado.</p>';
+    }
+  }
+  var cp = box.querySelector('[data-copiar]');
+  if (cp) cp.onclick = function(){
+    var t = this.getAttribute('data-copiar');
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ toast('Link copiado.'); }, function(){ prompt('Copie o link:', t); });
+    else prompt('Copie o link:', t);
+  };
+  var bx = box.querySelector('[data-baixar]');
+  if (bx) bx.onclick = function(){
+    var alvo = document.getElementById('qr-' + this.getAttribute('data-baixar')), nome = this.getAttribute('data-nome');
+    var cv = alvo ? alvo.querySelector('canvas') : null, img = alvo ? alvo.querySelector('img') : null;
+    var src = cv ? cv.toDataURL('image/png') : (img ? img.src : '');
+    if (!src) { toast('QR ainda não gerado.'); return; }
+    var el = document.createElement('a'); el.href = src; el.download = 'qr-vale-' + norm(nome).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png'; document.body.appendChild(el); el.click(); el.remove();
+  };
+}
+function teclaAbre(attr){ return function(ev){ if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); this.click(); } }; }
+function acha(lista, id){ for (var i = 0; i < lista.length; i++) if (lista[i].id === id) return lista[i]; return null; }
+
+document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && D && !EDIT) carregar(); });
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caixa · Vale refeição</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="comum.css">
+<style>
+.busca{position:relative}
+.busca input{font-size:20px;padding:16px 16px;border-radius:12px;border-width:2px}
+.busca .limpar{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;color:var(--cinza);font-size:20px;padding:6px 10px}
+.veredito{border-radius:14px;padding:22px 20px;margin:14px 0;color:#fff;background:var(--tinta)}
+.veredito.ativo{background:var(--verde)}
+.veredito.ja{background:var(--tinta)}
+.veredito.renovacao{background:var(--verm)}
+.veredito.pendente{background:var(--ambar);color:var(--tinta)}
+.veredito.inativo{background:var(--cinza)}
+.veredito .nome{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.veredito .sub{font-size:14px;opacity:.9;margin-top:6px}
+.veredito .frase{font-size:20px;font-weight:700;margin-top:16px;line-height:1.2}
+.veredito .expl{font-size:14px;opacity:.92;margin-top:4px}
+.veredito .bt-grande{margin-top:16px;background:#fff;color:var(--verde-escuro)}
+.veredito.ja .bt-link{color:#fff;opacity:.85}
+.veredito .fechar{position:absolute;right:10px;top:8px;background:none;color:inherit;opacity:.7;font-size:20px;padding:4px 8px}
+.veredito{position:relative}
+.res{background:var(--branco);border:1px solid var(--linha);border-radius:12px;padding:4px 14px;margin-top:12px}
+.res .linha{padding:12px 0}
+.res .linha.ja .tit{color:var(--cinza)}
+.hoje{margin-top:26px}
+.hoje summary{font-size:15px;font-weight:700;cursor:pointer;padding:6px 0}
+.hoje .linha{padding:8px 0}
+</style>
+</head>
+<body>
+<header id="topo"><h1>Vale refeição</h1><span class="emp"></span></header>
+<main class="estreita" id="app"><p class="msg">Carregando…</p></main>
+<script src="comum.js"></script>
+<script>
+var app = document.getElementById('app');
+var EST = null, HOJE = null, RES = [], SEL = null, TERMO = '', timer = null, ULT_BUSCA = 0;
+
+function topo(){
+  var h = '<h1>Vale refeição</h1>';
+  if (SESSAO.pin) h += '<span class="tag">Caixa</span>';
+  h += '<span class="emp">' + esc(EST ? EST.empresa : '') + '</span>';
+  if (SESSAO.pin) h += '<button id="bt-sair">Sair</button>';
+  document.getElementById('topo').innerHTML = h;
+  var s = document.getElementById('bt-sair'); if (s) s.onclick = sair;
+}
+window.aoPerderSessao = function(){ topo(); telaPin(app, EST, ['caixa', 'supervisor'], 'PIN incorreto ou trocado. Digite de novo.', entrar); };
+
+function boot(){
+  apiPub('/estado').then(function(e){
+    EST = e; topo();
+    if (sessaoGuardada(['caixa', 'supervisor'])) entrar();
+    else telaPin(app, EST, ['caixa', 'supervisor'], '', entrar);
+  }).catch(function(){ app.innerHTML = '<p class="erro">Não consegui carregar. Verifique a conexão e recarregue a página.</p>'; });
+}
+
+function entrar(){
+  topo();
+  app.innerHTML = '<div class="busca"><input type="search" id="q" placeholder="Nome, placa ou telefone" autocomplete="off" aria-label="Buscar parceiro" value="' + esc(TERMO) + '">'
+    + '<button class="limpar" id="q-limpar" aria-label="Limpar" hidden>&times;</button></div>'
+    + '<div id="veredito"></div><div id="res"></div>'
+    + '<details class="hoje" id="hoje"><summary>Almoços de hoje</summary><div id="hoje-lista"></div></details>';
+  var q = document.getElementById('q');
+  q.oninput = function(){
+    TERMO = this.value; SEL = null;
+    document.getElementById('q-limpar').hidden = !TERMO;
+    document.getElementById('veredito').innerHTML = '';   // some o veredito da busca anterior na hora
+    clearTimeout(timer);
+    if (TERMO.trim().length < 2) { RES = []; render(); return; }
+    timer = setTimeout(buscar, 250);
+  };
+  q.onkeydown = function(ev){ if (ev.key === 'Enter') { clearTimeout(timer); buscar(); } };
+  document.getElementById('q-limpar').onclick = limpar;
+  q.focus();
+  carregarHoje();
+  if (TERMO.trim().length >= 2) buscar();
+}
+
+function limpar(){ TERMO = ''; RES = []; SEL = null; var q = document.getElementById('q'); q.value = ''; document.getElementById('q-limpar').hidden = true; render(); q.focus(); }
+
+function buscar(){
+  var t = TERMO.trim(); if (t.length < 2) return;
+  var n = ++ULT_BUSCA;
+  apiAuth('/caixa/buscar?q=' + encodeURIComponent(t)).then(function(d){
+    if (n !== ULT_BUSCA) return;          // chegou resposta de uma busca antiga
+    HOJE = d.hoje; RES = d.parceiros;
+    if (RES.length === 1) SEL = RES[0].id;
+    render();
+  }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+}
+
+function carregarHoje(){
+  apiAuth('/caixa/hoje').then(function(d){
+    HOJE = d.hoje;
+    var box = document.getElementById('hoje-lista'), det = document.getElementById('hoje');
+    if (!box) return;
+    det.querySelector('summary').textContent = 'Almoços de hoje · ' + d.almocos.length;
+    var h = '';
+    if (!d.almocos.length) h = '<p class="msg">Nenhum almoço liberado hoje ainda.</p>';
+    for (var i = 0; i < d.almocos.length; i++) {
+      var a = d.almocos[i];
+      h += '<div class="linha"><div class="txt"><div class="tit">' + esc(a.nome) + '</div><div class="sub">' + esc(CATEGORIAS[a.categoria] || a.categoria) + ' · ' + horaBR(a.hora) + '</div></div></div>';
+    }
+    box.innerHTML = h;
+  }).catch(function(){});
+}
+
+function render(){
+  var vb = document.getElementById('veredito'), rb = document.getElementById('res');
+  if (!vb) return;
+  var sel = null;
+  for (var i = 0; i < RES.length; i++) if (RES[i].id === SEL) sel = RES[i];
+  vb.innerHTML = sel ? htmlVeredito(sel) : '';
+  var h = '';
+  if (TERMO.trim().length >= 2 && !RES.length) h = '<div class="res"><div class="vazio"><b>Ninguém com “' + esc(TERMO.trim()) + '”</b><span class="msg">Confira o nome, a placa ou o telefone. Sem cadastro, não libere o almoço.</span></div></div>';
+  else if (RES.length) {
+    h = '<div class="res">';
+    for (var j = 0; j < RES.length; j++) {
+      var p = RES[j];
+      h += '<div class="linha clic' + (p.almocou_em ? ' ja' : '') + '" data-sel="' + p.id + '" role="button" tabindex="0">'
+        + '<div class="txt"><div class="tit">' + esc(p.nome) + '</div><div class="sub">' + esc(CATEGORIAS[p.categoria] || p.categoria) + (p.placa ? ' · ' + esc(fmtPlaca(p.placa)) : '') + ' · ' + esc(fmtTel(p.telefone)) + (p.setor ? ' · ' + esc(p.setor) : '') + '</div></div>'
+        + (p.almocou_em ? '<span class="pill neutro">já almoçou</span>' : pillStatus(p.status)) + '<span class="chev">›</span></div>';
+    }
+    h += '</div>';
+  }
+  rb.innerHTML = h;
+  var ls = rb.querySelectorAll('[data-sel]');
+  var esc_ = function(){ SEL = this.getAttribute('data-sel'); render(); window.scrollTo(0, 0); };
+  for (var k = 0; k < ls.length; k++) { ls[k].onclick = esc_; ls[k].onkeydown = function(ev){ if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); esc_.call(this); } }; }
+  ligarVeredito(sel);
+}
+
+function htmlVeredito(p){
+  var primeiro = p.nome.split(' ')[0];
+  var sub = esc(CATEGORIAS[p.categoria] || p.categoria) + (p.placa ? ' · ' + esc(fmtPlaca(p.placa)) : '') + ' · ' + esc(fmtTel(p.telefone)) + (p.empresa ? ' · ' + esc(p.empresa) : '') + (p.setor ? ' · ' + esc(p.setor) : '');
+  var cls, frase, expl = '', acao = '';
+  if (p.almocou_em) {
+    cls = 'ja'; frase = 'Já almoçou hoje às ' + horaBR(p.almocou_em);
+    expl = 'É 1 almoço por dia. Não libere outra ficha.';
+    acao = '<button class="bt-link" data-desfazer="' + p.id + '">Lançado errado? Desfazer</button>';
+  } else if (p.status === 'ativo') {
+    cls = 'ativo'; frase = 'Pode almoçar';
+    expl = p.vencimento ? 'Adesivo válido até ' + dBr(p.vencimento) + (p.dias <= 15 ? ' · ' + textoVenc(p.dias) : '') + '.' : 'Cadastro ativo.';
+    acao = '<button class="bt-grande" data-liberar="' + p.id + '">Liberar almoço de hoje</button>';
+  } else if (p.status === 'renovacao') {
+    cls = 'renovacao'; frase = 'Adesivo vencido em ' + dBr(p.vencimento);
+    expl = 'Não libere. Precisa renovar o adesivo com o supervisor.';
+  } else if (p.status === 'pendente') {
+    cls = 'pendente'; frase = 'Adesivo não registrado';
+    expl = 'Não libere. O adesivo do veículo precisa ser registrado com o supervisor.';
+  } else {
+    cls = 'inativo'; frase = 'Cadastro inativo';
+    expl = 'Não libere. Fale com o supervisor.';
+  }
+  return '<div class="veredito ' + cls + '"><button class="fechar" data-fechar="1" aria-label="Fechar">&times;</button>'
+    + '<div class="nome">' + esc(p.nome) + '</div><div class="sub">' + sub + '</div>'
+    + '<div class="frase">' + esc(frase) + '</div>' + (expl ? '<div class="expl">' + esc(expl) + '</div>' : '') + acao + '</div>';
+}
+
+function ligarVeredito(p){
+  var f = document.querySelector('[data-fechar]'); if (f) f.onclick = function(){ SEL = null; render(); };
+  var l = document.querySelector('[data-liberar]');
+  if (l) l.onclick = function(){
+    l.disabled = true; l.textContent = 'Liberando…';
+    apiAuth('/caixa/liberar', { method: 'POST', body: { parceiro_id: p.id } }).then(function(r){
+      p.almocou_em = r.hora;
+      toast('Almoço liberado para ' + p.nome.split(' ')[0] + '.', 'Desfazer', function(){ desfazer(p); });
+      carregarHoje();
+      limpar();
+    }).catch(function(e){
+      if (e.message === '401') return;
+      toast(e.message); buscar();
+    });
+  };
+  var d = document.querySelector('[data-desfazer]');
+  if (d) d.onclick = function(){ if (confirm('Desfazer o almoço de hoje de ' + p.nome + '?')) desfazer(p); };
+}
+
+function desfazer(p){
+  apiAuth('/caixa/desfazer', { method: 'POST', body: { parceiro_id: p.id } }).then(function(){
+    p.almocou_em = null; toast('Almoço desfeito.'); carregarHoje(); render();
+  }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+}
+
+// ao voltar para a aba, atualiza a lista de hoje (pode ter virado o dia)
+document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && SESSAO.pin && document.getElementById('q')) carregarHoje(); });
+boot();
+</script>
+</body>
+</html>

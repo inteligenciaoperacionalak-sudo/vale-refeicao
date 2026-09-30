@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adesivo no veículo · Tôa Tôa</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="comum.css">
+</head>
+<body>
+<header id="topo"><h1>Vale refeição</h1><span class="emp">Cabana Tôa Tôa</span></header>
+<main class="estreita" id="app"><p class="msg">Carregando…</p></main>
+<script src="comum.js"></script>
+<script>
+var app = document.getElementById('app');
+var COD = param('s').toUpperCase();
+var SUP = null;
+var FOTO = null;   // Blob já reduzido
+
+function topo(){
+  document.getElementById('topo').innerHTML = '<h1>Vale refeição</h1>' + (SUP ? '<span class="tag">Supervisor: ' + esc(SUP.nome) + '</span><span class="emp">' + esc(SUP.empresa) + '</span>' : '<span class="emp">Cabana Tôa Tôa</span>');
+}
+
+function formulario(){
+  topo();
+  app.innerHTML = '<div class="form-parceiro"><h2>Adesivo no veículo</h2>'
+    + '<p class="intro">Uber e taxista com o adesivo da Cabana no carro têm almoço por 6 meses. Depois é só renovar o adesivo e registrar de novo aqui.</p>'
+    + '<label for="v-nome">Nome completo</label><input type="text" id="v-nome" autocomplete="name" value="' + esc(param('nome')) + '">'
+    + '<label for="v-tel">Telefone (WhatsApp)</label><input type="tel" id="v-tel" inputmode="tel" autocomplete="tel" placeholder="(73) 99999-9999" value="' + esc(fmtTel(param('tel'))) + '">'
+    + '<p class="dica">Use o mesmo telefone do cadastro do vale. É por ele que avisamos quando o adesivo estiver vencendo.</p>'
+    + '<label for="v-modelo">Modelo do veículo</label><input type="text" id="v-modelo" placeholder="ex.: Onix prata 2022">'
+    + '<label for="v-placa">Placa</label><input type="text" id="v-placa" autocapitalize="characters" placeholder="ABC-1D23" value="' + esc(fmtPlaca(param('placa'))) + '">'
+    + '<label>Foto do veículo com o adesivo</label>'
+    + '<label class="foto-campo" id="v-foto-campo"><input type="file" id="v-foto" accept="image/*"><span id="v-foto-txt">📷 Tirar ou escolher a foto</span></label>'
+    + '<p class="dica">Mostre o adesivo e a placa na mesma foto.</p>'
+    + '<img class="foto-previa" id="v-previa" alt="Prévia da foto">'
+    + '<div class="erro" id="v-erro"></div>'
+    + '<button class="bt-mar bt-grande" id="v-ok" style="margin-top:8px">Registrar adesivo</button></div>';
+  mascaraTel(document.getElementById('v-tel'));
+  mascaraPlaca(document.getElementById('v-placa'));
+  document.getElementById('v-foto').onchange = function(){ if (this.files && this.files[0]) prepararFoto(this.files[0]); };
+  document.getElementById('v-ok').onclick = enviar;
+}
+
+// Reduz a foto no aparelho (celular tira fotos de 3 a 8 MB) antes de enviar
+function prepararFoto(arq){
+  var txt = document.getElementById('v-foto-txt'), er = document.getElementById('v-erro');
+  txt.textContent = 'Preparando a foto…'; er.textContent = ''; FOTO = null;
+  var url = URL.createObjectURL(arq), img = new Image();
+  img.onload = function(){
+    var MAX = 1600, w = img.naturalWidth, h = img.naturalHeight, esc_ = Math.min(1, MAX / Math.max(w, h));
+    var c = document.createElement('canvas');
+    c.width = Math.round(w * esc_); c.height = Math.round(h * esc_);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    c.toBlob(function(b){
+      if (!b) { txt.textContent = '📷 Tirar ou escolher a foto'; er.textContent = 'Não consegui ler essa foto. Tente outra.'; return; }
+      FOTO = b;
+      var pv = document.getElementById('v-previa'); pv.src = c.toDataURL('image/jpeg', 0.7); pv.style.display = 'block';
+      txt.textContent = '✔ Foto pronta · trocar';
+    }, 'image/jpeg', 0.82);
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); txt.textContent = '📷 Tirar ou escolher a foto'; er.textContent = 'Não consegui ler essa foto. Tente outra.'; };
+  img.src = url;
+}
+
+function enviar(){
+  var er = document.getElementById('v-erro');
+  var nome = document.getElementById('v-nome').value, tel = document.getElementById('v-tel').value;
+  var modelo = document.getElementById('v-modelo').value, placa = document.getElementById('v-placa').value;
+  if (nome.trim().length < 3) { er.textContent = 'Escreva o nome completo.'; return; }
+  if (tel.replace(/\D/g, '').length < 10) { er.textContent = 'Informe o telefone com DDD.'; return; }
+  if (!modelo.trim()) { er.textContent = 'Informe o modelo do veículo.'; return; }
+  if (placa.replace(/[^A-Za-z0-9]/g, '').length !== 7) { er.textContent = 'Informe a placa completa.'; return; }
+  if (!FOTO) { er.textContent = 'Tire a foto do veículo com o adesivo.'; return; }
+  var fd = new FormData();
+  fd.append('codigo', COD); fd.append('nome', nome); fd.append('telefone', tel); fd.append('modelo', modelo); fd.append('placa', placa);
+  fd.append('foto', FOTO, 'adesivo.jpg');
+  var bt = document.getElementById('v-ok'); bt.disabled = true; bt.textContent = 'Enviando a foto…'; er.textContent = '';
+  apiPub('/veiculo', { method: 'POST', body: fd }).then(resultado)
+    .catch(function(e){ bt.disabled = false; bt.textContent = 'Registrar adesivo'; er.textContent = e.message; });
+}
+
+function resultado(r){
+  window.scrollTo(0, 0);
+  var tit = r.tipo === 'renovacao' ? 'Adesivo renovado!' : r.tipo === 'repetido' ? 'Foto atualizada' : 'Adesivo registrado!';
+  var h = '<div class="resultado ok"><div class="ic">✅</div><h2>' + tit + '</h2>'
+    + '<p>Veículo <b>' + esc(fmtPlaca(r.placa)) + '</b> · almoço liberado até <b>' + dBr(r.vencimento) + '</b>.</p>';
+  if (!r.vale) {
+    var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(r.nome) + '&tel=' + encodeURIComponent(r.telefone) + '&placa=' + encodeURIComponent(r.placa);
+    h += '<p>Falta só o cadastro do vale, com este mesmo telefone e placa.</p>'
+      + '<a class="bt-mar bt-grande" style="display:block;text-decoration:none;text-align:center" href="cadastro.html?' + q + '">Fazer o cadastro do vale</a>';
+  } else if (r.vale.placa_diferente) {
+    h += '<p>Seu cadastro do vale está com outra placa. Peça ao supervisor para corrigir para <b>' + esc(fmtPlaca(r.placa)) + '</b>.</p>';
+  } else if (r.vale.status === 'ativo') {
+    h += '<p>Seu vale está <b>ativo</b>. Na hora do almoço, apresente o vale no caixa para retirar a ficha.</p>';
+  } else {
+    h += '<p>Seu cadastro do vale está como <b>' + esc(STATUS_NOME[r.vale.status] || r.vale.status) + '</b>. Fale com o supervisor.</p>';
+  }
+  h += '</div>';
+  app.innerHTML = h;
+}
+
+if (!COD) { app.innerHTML = '<div class="resultado falha"><div class="ic">🔗</div><h2>Peça o QR do supervisor</h2><p>O registro do adesivo é feito na hora, com o supervisor conferindo o veículo.</p></div>'; }
+else apiPub('/supervisor/' + encodeURIComponent(COD)).then(function(s){ SUP = s; formulario(); })
+  .catch(function(e){ app.innerHTML = '<div class="resultado falha"><div class="ic">⚠️</div><h2>Link inválido</h2><p>' + esc(e.message) + '</p></div>'; });
+</script>
+</body>
+</html>

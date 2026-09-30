@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vale refeição · Tôa Tôa</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="comum.css">
+</head>
+<body>
+<header id="topo"><h1>Vale refeição</h1><span class="emp">Cabana Tôa Tôa</span></header>
+<main class="estreita" id="app"><p class="msg">Carregando…</p></main>
+<script src="comum.js"></script>
+<script>
+var app = document.getElementById('app');
+var COD = param('s').toUpperCase();
+
+function semCodigo(){
+  app.innerHTML = '<div class="resultado atencao"><div class="ic">🔗</div><h2>Peça o QR do supervisor</h2>'
+    + '<p>O cadastro no vale refeição é feito pelo QR ou link que o supervisor da Cabana mostra na hora.</p></div>'
+    + '<p class="msg" style="text-align:center;margin-top:26px">Equipe: <a href="caixa.html">Caixa</a> · <a href="painel.html">Painel</a></p>';
+}
+
+if (!COD) { semCodigo(); }
+else {
+  apiPub('/supervisor/' + encodeURIComponent(COD)).then(function(s){
+    document.getElementById('topo').innerHTML = '<h1>Vale refeição</h1><span class="tag">Supervisor: ' + esc(s.nome) + '</span><span class="emp">' + esc(s.empresa) + '</span>';
+    app.innerHTML = '<h2>Olá! O que você vai fazer?</h2>'
+      + '<p class="msg" style="margin-top:6px">O supervisor ' + esc(s.nome) + ' está autorizando o seu acesso ao almoço da Cabana.</p>'
+      + '<div class="entrada-qr">'
+      + '<a class="bt-entrada" href="cadastro.html?s=' + encodeURIComponent(COD) + '"><b>Cadastro do vale</b><span>Guias, motoristas, Uber, taxistas e prefeitura. Leva 1 minuto.</span></a>'
+      + '<a class="bt-entrada" href="veiculo.html?s=' + encodeURIComponent(COD) + '"><b>Adesivo no veículo</b><span>Uber e taxista: registrar ou renovar o adesivo da Cabana no carro (com foto).</span></a>'
+      + '</div>'
+      + '<p class="dica" style="margin-top:18px">Uber e taxista: registre o adesivo primeiro e depois faça o cadastro do vale.</p>';
+  }).catch(function(e){
+    app.innerHTML = '<div class="resultado falha"><div class="ic">⚠️</div><h2>Link inválido</h2><p>' + esc(e.message) + '</p></div>';
+  });
+}
+</script>
+</body>
+</html>

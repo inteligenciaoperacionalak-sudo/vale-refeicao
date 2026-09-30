@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadastro do vale · Tôa Tôa</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="comum.css">
+</head>
+<body>
+<header id="topo"><h1>Vale refeição</h1><span class="emp">Cabana Tôa Tôa</span></header>
+<main class="estreita" id="app"><p class="msg">Carregando…</p></main>
+<script src="comum.js"></script>
+<script>
+var app = document.getElementById('app');
+var COD = param('s').toUpperCase();
+var SUP = null;
+var CAT = '';
+
+function topo(){
+  document.getElementById('topo').innerHTML = '<h1>Vale refeição</h1>' + (SUP ? '<span class="tag">Supervisor: ' + esc(SUP.nome) + '</span><span class="emp">' + esc(SUP.empresa) + '</span>' : '<span class="emp">Cabana Tôa Tôa</span>');
+}
+
+function formulario(){
+  topo();
+  var h = '<div class="form-parceiro"><h2>Cadastro do vale</h2><p class="intro">Preencha para ter acesso ao almoço da Cabana.</p>'
+    + '<label for="f-nome">Nome completo</label><input type="text" id="f-nome" autocomplete="name" value="' + esc(param('nome')) + '">'
+    + '<label for="f-tel">Telefone (WhatsApp)</label><input type="tel" id="f-tel" inputmode="tel" autocomplete="tel" placeholder="(73) 99999-9999" value="' + esc(fmtTel(param('tel'))) + '">'
+    + '<label for="f-emp">Empresa <span class="opc">(opcional)</span></label><input type="text" id="f-emp" autocomplete="organization">'
+    + '<label>Categoria</label><div class="opcoes" id="f-cats">';
+  var ordem = ['guia', 'motorista', 'uber', 'taxista', 'prefeitura'];
+  for (var i = 0; i < ordem.length; i++) h += '<button type="button" class="opcao" data-cat="' + ordem[i] + '">' + CATEGORIAS[ordem[i]] + '</button>';
+  h += '</div>'
+    + '<div id="f-extra"></div>'
+    + '<div class="erro" id="f-erro"></div>'
+    + '<button class="bt-mar bt-grande" id="f-ok" style="margin-top:8px">Fazer cadastro</button></div>';
+  app.innerHTML = h;
+  mascaraTel(document.getElementById('f-tel'));
+  var bs = app.querySelectorAll('[data-cat]');
+  for (var j = 0; j < bs.length; j++) bs[j].onclick = function(){ escolher(this.getAttribute('data-cat')); };
+  document.getElementById('f-ok').onclick = enviar;
+  var pre = param('cat');
+  if (CATEGORIAS[pre]) escolher(pre);
+}
+
+function escolher(cat){
+  CAT = cat;
+  var bs = app.querySelectorAll('[data-cat]');
+  for (var i = 0; i < bs.length; i++) bs[i].className = 'opcao' + (bs[i].getAttribute('data-cat') === cat ? ' on' : '');
+  var ex = document.getElementById('f-extra'), h = '';
+  if (cat === 'prefeitura') h = '<label for="f-setor">Setor na prefeitura</label><input type="text" id="f-setor" placeholder="ex.: Secretaria de Turismo">';
+  if (COM_ADESIVO[cat]) h = '<label for="f-placa">Placa do veículo</label><input type="text" id="f-placa" autocapitalize="characters" placeholder="ABC-1D23" value="' + esc(fmtPlaca(param('placa'))) + '">'
+    + '<p class="dica">A mesma placa do adesivo. Sem adesivo registrado, o cadastro fica pendente e não libera o almoço.</p>';
+  ex.innerHTML = h;
+  var pl = document.getElementById('f-placa'); if (pl) mascaraPlaca(pl);
+  document.getElementById('f-erro').textContent = '';
+}
+
+function enviar(){
+  var er = document.getElementById('f-erro');
+  var dados = {
+    codigo: COD,
+    nome: document.getElementById('f-nome').value,
+    telefone: document.getElementById('f-tel').value,
+    empresa: document.getElementById('f-emp').value,
+    categoria: CAT,
+    setor: CAT === 'prefeitura' ? document.getElementById('f-setor').value : '',
+    placa: COM_ADESIVO[CAT] ? document.getElementById('f-placa').value : ''
+  };
+  if (dados.nome.trim().length < 3) { er.textContent = 'Escreva o nome completo.'; return; }
+  if (dados.telefone.replace(/\D/g, '').length < 10) { er.textContent = 'Informe o telefone com DDD.'; return; }
+  if (!CAT) { er.textContent = 'Escolha a categoria.'; return; }
+  if (CAT === 'prefeitura' && !dados.setor.trim()) { er.textContent = 'Informe o setor da prefeitura.'; return; }
+  if (COM_ADESIVO[CAT] && dados.placa.replace(/[^A-Za-z0-9]/g, '').length !== 7) { er.textContent = 'Informe a placa completa.'; return; }
+  var bt = document.getElementById('f-ok'); bt.disabled = true; bt.textContent = 'Enviando…'; er.textContent = '';
+  apiPub('/cadastro', { method: 'POST', body: dados }).then(function(r){
+    resultado(r, dados);
+  }).catch(function(e){ bt.disabled = false; bt.textContent = 'Fazer cadastro'; er.textContent = e.message; });
+}
+
+function resultado(r, dados){
+  window.scrollTo(0, 0);
+  var h;
+  if (r.status === 'ativo') {
+    h = '<div class="resultado ok"><div class="ic">✅</div><h2>Cadastro feito, ' + esc(r.nome.split(' ')[0]) + '!</h2>'
+      + '<p>Você já está no vale refeição da Cabana como <b>' + esc(CATEGORIAS[r.categoria]) + '</b>.</p>'
+      + (r.vencimento ? '<p>Adesivo válido até <b>' + dBr(r.vencimento) + '</b>.</p>' : '')
+      + '<p>Na hora do almoço, apresente o seu vale no caixa para retirar a ficha.</p></div>';
+  } else if (r.status === 'pendente') {
+    var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(dados.nome) + '&tel=' + encodeURIComponent(dados.telefone) + '&placa=' + encodeURIComponent(dados.placa);
+    h = '<div class="resultado atencao"><div class="ic">📸</div><h2>Falta registrar o adesivo</h2>'
+      + '<p>Seu cadastro foi recebido, mas ' + esc(CATEGORIAS[r.categoria]) + ' só almoça com o adesivo da Cabana registrado no veículo de placa <b>' + esc(fmtPlaca(dados.placa)) + '</b>.</p>'
+      + '<a class="bt-mar bt-grande" style="display:block;text-decoration:none;text-align:center" href="veiculo.html?' + q + '">Registrar o adesivo agora</a>'
+      + '<p class="dica" style="margin-top:12px">Se a placa estiver errada, peça ao supervisor para corrigir.</p></div>';
+  } else {
+    h = '<div class="resultado atencao"><div class="ic">ℹ️</div><h2>Cadastro recebido</h2><p>Situação: ' + esc(STATUS_NOME[r.status] || r.status) + '. Fale com o supervisor.</p></div>';
+  }
+  app.innerHTML = h;
+}
+
+if (!COD) { app.innerHTML = '<div class="resultado falha"><div class="ic">🔗</div><h2>Peça o QR do supervisor</h2><p>O cadastro só é feito pelo QR ou link do supervisor da Cabana.</p></div>'; }
+else apiPub('/supervisor/' + encodeURIComponent(COD)).then(function(s){ SUP = s; formulario(); })
+  .catch(function(e){ app.innerHTML = '<div class="resultado falha"><div class="ic">⚠️</div><h2>Link inválido</h2><p>' + esc(e.message) + '</p></div>'; });
+</script>
+</body>
+</html>
