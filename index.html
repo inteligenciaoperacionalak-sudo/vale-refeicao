@@ -13,29 +13,18 @@
 <main class="estreita" id="app"><p class="msg">Carregando…</p></main>
 <script src="comum.js"></script>
 <script>
+// Cada supervisor tem dois QRs, que abrem direto o formulário certo (cadastro.html ou veiculo.html).
+// Um link antigo com ?s= cai aqui e segue para o cadastro do vale.
 var app = document.getElementById('app');
 var COD = param('s').toUpperCase();
-
-function semCodigo(){
-  app.innerHTML = '<div class="resultado atencao"><div class="ic">🔗</div><h2>Peça o QR do supervisor</h2>'
-    + '<p>O cadastro no vale refeição é feito pelo QR ou link que o supervisor da Cabana mostra na hora.</p></div>'
-    + '<p class="msg" style="text-align:center;margin-top:26px">Equipe: <a href="caixa.html">Caixa</a> · <a href="painel.html">Painel</a></p>';
-}
-
-if (!COD) { semCodigo(); }
-else {
-  apiPub('/supervisor/' + encodeURIComponent(COD)).then(function(s){
-    document.getElementById('topo').innerHTML = '<h1>Vale refeição</h1><span class="tag">Supervisor: ' + esc(s.nome) + '</span><span class="emp">' + esc(s.empresa) + '</span>';
-    app.innerHTML = '<h2>Olá! O que você vai fazer?</h2>'
-      + '<p class="msg" style="margin-top:6px">O supervisor ' + esc(s.nome) + ' está autorizando o seu acesso ao almoço da Cabana.</p>'
-      + '<div class="entrada-qr">'
-      + '<a class="bt-entrada" href="cadastro.html?s=' + encodeURIComponent(COD) + '"><b>Cadastro do vale</b><span>Guias, motoristas, Uber, taxistas e prefeitura. Leva 1 minuto.</span></a>'
-      + '<a class="bt-entrada" href="veiculo.html?s=' + encodeURIComponent(COD) + '"><b>Adesivo no veículo</b><span>Uber e taxista: registrar ou renovar o adesivo da Cabana no carro (com foto).</span></a>'
-      + '</div>'
-      + '<p class="dica" style="margin-top:18px">Uber e taxista: registre o adesivo primeiro e depois faça o cadastro do vale.</p>';
-  }).catch(function(e){
-    app.innerHTML = '<div class="resultado falha"><div class="ic">⚠️</div><h2>Link inválido</h2><p>' + esc(e.message) + '</p></div>';
-  });
+if (COD) {
+  location.replace('cadastro.html?s=' + encodeURIComponent(COD));
+} else {
+  app.innerHTML = '<h2>Equipe da Cabana</h2><p class="msg" style="margin-top:6px">Parceiros entram pelo QR do supervisor: um para o cadastro do vale, outro para o adesivo no veículo.</p>'
+    + '<div class="entrada-qr">'
+    + '<a class="bt-entrada" href="caixa.html"><b>Caixa</b><span>Buscar o parceiro e liberar o almoço do dia.</span></a>'
+    + '<a class="bt-entrada" href="painel.html"><b>Painel</b><span>Cadastros, adesivos, renovações, almoços e QRs dos supervisores.</span></a>'
+    + '</div>';
 }
 </script>
 </body>

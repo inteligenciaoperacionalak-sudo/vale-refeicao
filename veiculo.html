@@ -84,19 +84,21 @@ function enviar(){
 
 function resultado(r){
   window.scrollTo(0, 0);
-  var tit = r.tipo === 'renovacao' ? 'Adesivo renovado!' : r.tipo === 'repetido' ? 'Foto atualizada' : 'Adesivo registrado!';
-  var h = '<div class="resultado ok"><div class="ic">✅</div><h2>' + tit + '</h2>'
-    + '<p>Veículo <b>' + esc(fmtPlaca(r.placa)) + '</b> · almoço liberado até <b>' + dBr(r.vencimento) + '</b>.</p>';
+  var h = '<div class="resultado ok"><div class="ic">✅</div><h2>Parceria registrada com sucesso!</h2>'
+    + '<p>Obrigado por manter o Tôa Tôa com você pelas ruas de Porto Seguro.</p>'
+    + '<p>Seu veículo foi registrado e o adesivo de parceiro Tôa Tôa está confirmado.<br>Esse acompanhamento acontece periodicamente.</p>'
+    + '<p>Obrigado pela parceria e por fazer parte do Tôa Tôa! 💛</p>'
+    + '<p class="dica" style="margin-top:14px">Veículo ' + esc(fmtPlaca(r.placa)) + ' · adesivo válido até ' + dBr(r.vencimento) + '</p>';
   if (!r.vale) {
     var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(r.nome) + '&tel=' + encodeURIComponent(r.telefone) + '&placa=' + encodeURIComponent(r.placa);
-    h += '<p>Falta só o cadastro do vale, com este mesmo telefone e placa.</p>'
+    h += '<p style="margin-top:14px">Falta só o cadastro do vale refeição, com este mesmo telefone e placa.</p>'
       + '<a class="bt-mar bt-grande" style="display:block;text-decoration:none;text-align:center" href="cadastro.html?' + q + '">Fazer o cadastro do vale</a>';
   } else if (r.vale.placa_diferente) {
-    h += '<p>Seu cadastro do vale está com outra placa. Peça ao supervisor para corrigir para <b>' + esc(fmtPlaca(r.placa)) + '</b>.</p>';
+    h += '<p class="dica">Seu cadastro do vale está com outra placa. Peça ao supervisor para corrigir para ' + esc(fmtPlaca(r.placa)) + '.</p>';
   } else if (r.vale.status === 'ativo') {
-    h += '<p>Seu vale está <b>ativo</b>. Na hora do almoço, apresente o vale no caixa para retirar a ficha.</p>';
+    h += '<p class="dica">Seu vale refeição está ativo. Na hora do almoço, apresente o vale no caixa para retirar a ficha.</p>';
   } else {
-    h += '<p>Seu cadastro do vale está como <b>' + esc(STATUS_NOME[r.vale.status] || r.vale.status) + '</b>. Fale com o supervisor.</p>';
+    h += '<p class="dica">Seu cadastro do vale está como ' + esc(STATUS_NOME[r.vale.status] || r.vale.status) + '. Fale com o supervisor.</p>';
   }
   h += '</div>';
   app.innerHTML = h;

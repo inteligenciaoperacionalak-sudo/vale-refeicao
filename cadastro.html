@@ -83,10 +83,11 @@ function resultado(r, dados){
   window.scrollTo(0, 0);
   var h;
   if (r.status === 'ativo') {
-    h = '<div class="resultado ok"><div class="ic">✅</div><h2>Cadastro feito, ' + esc(r.nome.split(' ')[0]) + '!</h2>'
-      + '<p>Você já está no vale refeição da Cabana como <b>' + esc(CATEGORIAS[r.categoria]) + '</b>.</p>'
-      + (r.vencimento ? '<p>Adesivo válido até <b>' + dBr(r.vencimento) + '</b>.</p>' : '')
-      + '<p>Na hora do almoço, apresente o seu vale no caixa para retirar a ficha.</p></div>';
+    h = '<div class="resultado ok"><div class="ic">✅</div><h2>Tudo certo, parceiro!</h2>'
+      + '<p>Seu almoço no Tôa Tôa foi registrado com sucesso.</p>'
+      + '<p>É um prazer ter você com a gente.</p>'
+      + '<p>Bom almoço e seja sempre bem-vindo! 💛</p>'
+      + '<p class="dica" style="margin-top:14px">' + esc(r.nome) + ' · ' + esc(CATEGORIAS[r.categoria]) + (r.vencimento ? ' · adesivo válido até ' + dBr(r.vencimento) : '') + '<br>Na hora do almoço, apresente o seu vale no caixa para retirar a ficha.</p></div>';
   } else if (r.status === 'pendente') {
     var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(dados.nome) + '&tel=' + encodeURIComponent(dados.telefone) + '&placa=' + encodeURIComponent(dados.placa);
     h = '<div class="resultado atencao"><div class="ic">📸</div><h2>Falta registrar o adesivo</h2>'

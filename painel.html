@@ -17,7 +17,8 @@
 .periodo{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
 .periodo > div{flex:1;min-width:130px}
 .periodo label{margin-top:0}
-.qr-box{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:10px 0 4px}
+.qrs{display:flex;gap:24px;flex-wrap:wrap;padding:6px 0 10px}
+.qr-box{display:flex;gap:16px;align-items:flex-start;flex:1;min-width:300px;background:var(--papel);border:1px solid var(--linha);border-radius:10px;padding:12px}
 .qr-box .qr{background:#fff;padding:8px;border:1px solid var(--linha);border-radius:8px}
 .qr-box .qr img,.qr-box .qr canvas{display:block}
 .qr-box .lk{flex:1;min-width:220px;font-size:13px;color:var(--cinza);overflow-wrap:anywhere}
@@ -73,7 +74,6 @@ function supNome(id){
   return '';
 }
 function baseSite(){ return location.href.replace(/[#?].*$/, '').replace(/painel\.html$/, ''); }
-function linkSup(cod){ return baseSite() + '?s=' + cod; }
 function msgZap(v){
   return 'Olá, ' + v.nome.split(' ')[0] + '! Aqui é da Cabana Tôa Tôa. O adesivo do seu veículo ' + fmtPlaca(v.placa)
     + (v.dias < 0 ? ' venceu em ' : ' vence em ') + dBr(v.vencimento)
@@ -339,19 +339,28 @@ function baixarCsv(){
 }
 
 // -------------------------------------------------------- supervisores ---
+// Cada supervisor tem dois QRs: um abre o cadastro do vale, o outro o Marketing de Veículo.
+var QRS = [
+  { k: 'vale', titulo: 'Vale refeição', desc: 'Cadastro do vale (guias, motoristas, Uber, taxistas, prefeitura)', link: function(c){ return baseSite() + 'cadastro.html?s=' + c; } },
+  { k: 'veiculo', titulo: 'Marketing de Veículo', desc: 'Adesivo no carro (Uber e taxista), com foto', link: function(c){ return baseSite() + 'veiculo.html?s=' + c; } }
+];
 function htmlSupervisores(){
-  var h = '<div class="caixa"><p class="msg" style="margin-top:0">Cada supervisor tem o seu QR. Quem se cadastra por ele fica registrado como autorizado por esse supervisor. Imprima o QR ou guarde o link no celular.</p>'
+  var h = '<div class="caixa"><p class="msg" style="margin-top:0">Cada supervisor tem dois QRs: um para o cadastro do vale refeição e outro para o Marketing de Veículo. Quem entra por eles fica registrado como autorizado por esse supervisor. Imprima os QRs ou guarde os links no celular.</p>'
     + '<div class="filtro"><input type="text" id="s-nome" placeholder="Nome do supervisor" aria-label="Nome do novo supervisor"><button class="bt-mar" id="s-add">Adicionar supervisor</button></div>';
-  if (!D.supervisores.length) h += '<div class="vazio"><b>Nenhum supervisor ainda</b><span class="msg">Adicione o primeiro para gerar o QR de cadastro.</span></div>';
+  if (!D.supervisores.length) h += '<div class="vazio"><b>Nenhum supervisor ainda</b><span class="msg">Adicione o primeiro para gerar os QRs de cadastro.</span></div>';
   for (var i = 0; i < D.supervisores.length; i++) {
     var s = D.supervisores[i];
-    h += '<div class="linha' + (s.ativo ? '' : ' sup-off') + '"><div class="txt"><div class="tit">' + esc(s.nome) + '</div><div class="sub">código ' + esc(s.codigo) + (s.ativo ? '' : ' · desativado: o QR não funciona') + '</div></div>'
-      + '<button class="bt-cinza bt-mini" data-qr="' + s.id + '">' + (QR_ABERTO === s.id ? 'Fechar QR' : 'Ver QR e link') + '</button>'
+    h += '<div class="linha' + (s.ativo ? '' : ' sup-off') + '"><div class="txt"><div class="tit">' + esc(s.nome) + '</div><div class="sub">código ' + esc(s.codigo) + (s.ativo ? '' : ' · desativado: os QRs não funcionam') + '</div></div>'
+      + '<button class="bt-cinza bt-mini" data-qr="' + s.id + '">' + (QR_ABERTO === s.id ? 'Fechar QRs' : 'Ver QRs e links') + '</button>'
       + '<button class="bt-link bt-mini" data-supativo="' + s.id + '" data-valor="' + (s.ativo ? '0' : '1') + '">' + (s.ativo ? 'Desativar' : 'Reativar') + '</button></div>';
     if (QR_ABERTO === s.id) {
-      var lk = linkSup(s.codigo);
-      h += '<div class="qr-box"><div class="qr" id="qr-' + s.id + '"></div><div class="lk">Link do supervisor ' + esc(s.nome) + ':<code>' + esc(lk) + '</code>'
-        + '<div class="acoes" style="margin-top:0"><button class="bt-mar bt-mini" data-copiar="' + esc(lk) + '">Copiar link</button><button class="bt-cinza bt-mini" data-baixar="' + s.id + '" data-nome="' + esc(s.nome) + '">Baixar QR (PNG)</button></div></div></div>';
+      h += '<div class="qrs">';
+      for (var q = 0; q < QRS.length; q++) {
+        var lk = QRS[q].link(s.codigo);
+        h += '<div class="qr-box"><div class="qr" id="qr-' + QRS[q].k + '-' + s.id + '"></div><div class="lk"><b style="color:var(--tinta);font-size:15px">QR ' + QRS[q].titulo + '</b><br>' + esc(QRS[q].desc) + '<code>' + esc(lk) + '</code>'
+          + '<div class="acoes" style="margin-top:0"><button class="bt-mar bt-mini" data-copiar="' + esc(lk) + '">Copiar link</button><button class="bt-cinza bt-mini" data-baixar="' + QRS[q].k + '-' + s.id + '" data-nome="' + esc(QRS[q].k + '-' + s.nome) + '">Baixar QR (PNG)</button></div></div></div>';
+      }
+      h += '</div>';
     }
   }
   return h + '</div>';
@@ -439,29 +448,31 @@ function ligar(){
   var sa = box.querySelectorAll('[data-supativo]');
   for (var r = 0; r < sa.length; r++) sa[r].onclick = function(){
     var id = this.getAttribute('data-supativo'), ativo = this.getAttribute('data-valor') === '1';
-    if (!ativo && !confirm('Desativar este supervisor? O QR dele para de funcionar; os cadastros que ele já autorizou continuam.')) return;
+    if (!ativo && !confirm('Desativar este supervisor? Os QRs dele param de funcionar; os cadastros que ele já autorizou continuam.')) return;
     apiAuth('/supervisores/' + id, { method: 'POST', body: { ativo: ativo } }).then(function(){ toast(ativo ? 'Supervisor reativado.' : 'Supervisor desativado.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
   };
   if (QR_ABERTO) {
-    var s = acha(D.supervisores, QR_ABERTO), alvo = document.getElementById('qr-' + QR_ABERTO);
-    if (s && alvo) {
-      if (window.QRCode) new QRCode(alvo, { text: linkSup(s.codigo), width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+    var s = acha(D.supervisores, QR_ABERTO);
+    for (var qi = 0; s && qi < QRS.length; qi++) {
+      var alvo = document.getElementById('qr-' + QRS[qi].k + '-' + QR_ABERTO);
+      if (!alvo) continue;
+      if (window.QRCode) new QRCode(alvo, { text: QRS[qi].link(s.codigo), width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
       else alvo.innerHTML = '<p class="msg">Não consegui gerar o QR. Use o link ao lado.</p>';
     }
   }
-  var cp = box.querySelector('[data-copiar]');
-  if (cp) cp.onclick = function(){
+  var cps = box.querySelectorAll('[data-copiar]');
+  for (var c = 0; c < cps.length; c++) cps[c].onclick = function(){
     var t = this.getAttribute('data-copiar');
     if (navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ toast('Link copiado.'); }, function(){ prompt('Copie o link:', t); });
     else prompt('Copie o link:', t);
   };
-  var bx = box.querySelector('[data-baixar]');
-  if (bx) bx.onclick = function(){
+  var bxs = box.querySelectorAll('[data-baixar]');
+  for (var b = 0; b < bxs.length; b++) bxs[b].onclick = function(){
     var alvo = document.getElementById('qr-' + this.getAttribute('data-baixar')), nome = this.getAttribute('data-nome');
     var cv = alvo ? alvo.querySelector('canvas') : null, img = alvo ? alvo.querySelector('img') : null;
     var src = cv ? cv.toDataURL('image/png') : (img ? img.src : '');
     if (!src) { toast('QR ainda não gerado.'); return; }
-    var el = document.createElement('a'); el.href = src; el.download = 'qr-vale-' + norm(nome).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png'; document.body.appendChild(el); el.click(); el.remove();
+    var el = document.createElement('a'); el.href = src; el.download = 'qr-' + norm(nome).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png'; document.body.appendChild(el); el.click(); el.remove();
   };
 }
 function teclaAbre(attr){ return function(ev){ if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); this.click(); } }; }
