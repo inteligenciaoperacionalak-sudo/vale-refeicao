@@ -66,12 +66,16 @@ a{color:var(--mar)}
 .pill.cat{background:var(--mar-claro);color:var(--mar-escuro)}
 .pill.neutro{background:var(--cinza-claro);color:var(--tinta)}
 
-/* abas (pílulas roláveis) */
-.abas{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+/* abas (pílulas roláveis). Dois grupos: categorias e, destacado, o grupo do sistema (Almoços, Supervisores) */
+.abas{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;align-items:center}
+.abas .grupo{display:flex;gap:6px;flex:none}
+.abas .grupo.sis{margin-left:6px;padding-left:12px;border-left:2px solid var(--linha)}
 .aba{background:none;color:var(--cinza);padding:8px 14px;font-size:14px;border-radius:99px;white-space:nowrap;flex:none}
 .aba.on{background:var(--tinta);color:#fff}
 .aba .n{font-weight:500;opacity:.8}
-@media (min-width:700px){.abas{flex-wrap:wrap;overflow:visible}}
+.aba.sis{border:1.5px solid var(--tinta);color:var(--tinta);font-weight:700;padding:6.5px 14px}
+.aba.sis.on{background:var(--ambar);border-color:var(--ambar);color:var(--tinta)}
+@media (min-width:700px){.abas{flex-wrap:wrap;overflow:visible}.abas .grupo{flex-wrap:wrap}.abas .grupo.sis{margin-left:auto}}
 
 /* linhas de lista */
 .linha{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--linha)}
@@ -95,15 +99,48 @@ a{color:var(--mar)}
 .hist{font-size:13px;color:var(--cinza);margin-top:6px}
 .hist div{padding:3px 0}
 
-/* resumo em números */
+/* resumo em números. No painel os cards são botões: filtram a lista ou levam à aba certa */
 .numeros{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px}
-.num{background:var(--branco);border:1px solid var(--linha);border-radius:10px;padding:12px}
+.num{display:block;width:100%;text-align:left;background:var(--branco);border:1px solid var(--linha);border-radius:10px;padding:12px;color:var(--tinta);font-family:inherit;position:relative}
 .num b{display:block;font-size:26px;font-weight:800;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.num span{font-size:12px;font-weight:600;color:var(--cinza)}
+.num span{display:block;font-size:12px;font-weight:600;color:var(--cinza);margin-top:2px}
 .num.alerta{border-color:var(--verm);background:var(--verm-claro)}
 .num.alerta b{color:var(--verm)}
 .num.aviso{border-color:var(--ambar);background:var(--ambar-claro)}
 .num.aviso b{color:var(--ambar-texto)}
+button.num{cursor:pointer}
+button.num:hover{border-color:var(--tinta)}
+button.num.on{box-shadow:inset 0 0 0 2px var(--tinta);border-color:var(--tinta)}
+button.num.on::after{content:'filtrando';position:absolute;right:8px;top:8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;background:var(--tinta);color:#fff;padding:2px 6px;border-radius:99px}
+.filtrando{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--ambar-claro);border:1px solid var(--ambar);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:14px}
+.filtrando .bt-link{padding:0}
+
+/* tela de liberação (caixa e supervisor) */
+.tela-intro{font-size:14px;color:var(--cinza);margin:0 0 10px}
+.busca{position:relative}
+.busca input{font-size:20px;padding:16px 16px;border-radius:12px;border-width:2px}
+.busca .limpar{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;color:var(--cinza);font-size:20px;padding:6px 10px}
+.veredito{position:relative;border-radius:14px;padding:22px 20px;margin:14px 0;color:#fff;background:var(--tinta)}
+.veredito.ativo{background:var(--verde)}
+.veredito.ja{background:var(--tinta)}
+.veredito.renovacao{background:var(--verm)}
+.veredito.pendente{background:var(--ambar);color:var(--tinta)}
+.veredito.inativo{background:var(--cinza)}
+.veredito .nome{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.veredito .sub{font-size:14px;opacity:.9;margin-top:6px}
+.veredito .frase{font-size:20px;font-weight:700;margin-top:16px;line-height:1.2}
+.veredito .expl{font-size:14px;opacity:.92;margin-top:4px}
+.veredito .bt-grande{margin-top:16px;background:#fff;color:var(--verde-escuro)}
+.veredito.ja .bt-link{color:#fff;opacity:.85}
+.veredito .fechar{position:absolute;right:10px;top:8px;background:none;color:inherit;opacity:.7;font-size:20px;padding:4px 8px}
+.res{background:var(--branco);border:1px solid var(--linha);border-radius:12px;padding:4px 14px;margin-top:12px}
+.res .linha{padding:12px 0}
+.res .linha.ja .tit{color:var(--cinza)}
+.fora{font-size:13px;color:var(--cinza);background:var(--papel);border-radius:8px;padding:10px 12px;margin:8px 0 10px}
+.fora b{color:var(--tinta)}
+.hoje{margin-top:26px}
+.hoje summary{font-size:15px;font-weight:700;cursor:pointer;padding:6px 0}
+.hoje .linha{padding:8px 0}
 
 /* formulário do parceiro */
 .form-parceiro h2{margin-bottom:6px}

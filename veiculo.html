@@ -17,6 +17,7 @@ var app = document.getElementById('app');
 var COD = param('s').toUpperCase();
 var SUP = null;
 var FOTO = null;   // Blob já reduzido
+var CAT = CAT_VEICULO[param('cat')] ? param('cat') : '';   // taxista ou uber (motorista de aplicativo)
 
 function topo(){
   document.getElementById('topo').innerHTML = '<h1>Vale refeição</h1>' + (SUP ? '<span class="tag">Supervisor: ' + esc(SUP.nome) + '</span><span class="emp">' + esc(SUP.empresa) + '</span>' : '<span class="emp">Cabana Tôa Tôa</span>');
@@ -25,10 +26,13 @@ function topo(){
 function formulario(){
   topo();
   app.innerHTML = '<div class="form-parceiro"><h2>Adesivo no veículo</h2>'
-    + '<p class="intro">Uber e taxista com o adesivo da Cabana no carro têm almoço por 6 meses. Depois é só renovar o adesivo e registrar de novo aqui.</p>'
+    + '<p class="intro">Taxista e motorista de aplicativo com o adesivo da Cabana no carro têm almoço por 6 meses. Depois é só renovar o adesivo e registrar de novo aqui.</p>'
     + '<label for="v-nome">Nome completo</label><input type="text" id="v-nome" autocomplete="name" value="' + esc(param('nome')) + '">'
     + '<label for="v-tel">Telefone (WhatsApp)</label><input type="tel" id="v-tel" inputmode="tel" autocomplete="tel" placeholder="(73) 99999-9999" value="' + esc(fmtTel(param('tel'))) + '">'
     + '<p class="dica">Use o mesmo telefone do cadastro do vale. É por ele que avisamos quando o adesivo estiver vencendo.</p>'
+    + '<label>Você é</label><div class="opcoes" id="v-cats">'
+    + '<button type="button" class="opcao" data-cat="taxista">Taxista</button>'
+    + '<button type="button" class="opcao" data-cat="uber">Motorista de aplicativo</button></div>'
     + '<label for="v-modelo">Modelo do veículo</label><input type="text" id="v-modelo" placeholder="ex.: Onix prata 2022">'
     + '<label for="v-placa">Placa</label><input type="text" id="v-placa" autocapitalize="characters" placeholder="ABC-1D23" value="' + esc(fmtPlaca(param('placa'))) + '">'
     + '<label>Foto do veículo com o adesivo</label>'
@@ -39,8 +43,18 @@ function formulario(){
     + '<button class="bt-mar bt-grande" id="v-ok" style="margin-top:8px">Registrar adesivo</button></div>';
   mascaraTel(document.getElementById('v-tel'));
   mascaraPlaca(document.getElementById('v-placa'));
+  var bs = app.querySelectorAll('[data-cat]');
+  for (var i = 0; i < bs.length; i++) bs[i].onclick = function(){ escolher(this.getAttribute('data-cat')); };
+  if (CAT) escolher(CAT);
   document.getElementById('v-foto').onchange = function(){ if (this.files && this.files[0]) prepararFoto(this.files[0]); };
   document.getElementById('v-ok').onclick = enviar;
+}
+
+function escolher(cat){
+  CAT = cat;
+  var bs = app.querySelectorAll('[data-cat]');
+  for (var i = 0; i < bs.length; i++) bs[i].className = 'opcao' + (bs[i].getAttribute('data-cat') === cat ? ' on' : '');
+  document.getElementById('v-erro').textContent = '';
 }
 
 // Reduz a foto no aparelho (celular tira fotos de 3 a 8 MB) antes de enviar
@@ -71,11 +85,12 @@ function enviar(){
   var modelo = document.getElementById('v-modelo').value, placa = document.getElementById('v-placa').value;
   if (nome.trim().length < 3) { er.textContent = 'Escreva o nome completo.'; return; }
   if (tel.replace(/\D/g, '').length < 10) { er.textContent = 'Informe o telefone com DDD.'; return; }
+  if (!CAT) { er.textContent = 'Escolha se você é taxista ou motorista de aplicativo.'; return; }
   if (!modelo.trim()) { er.textContent = 'Informe o modelo do veículo.'; return; }
   if (placa.replace(/[^A-Za-z0-9]/g, '').length !== 7) { er.textContent = 'Informe a placa completa.'; return; }
   if (!FOTO) { er.textContent = 'Tire a foto do veículo com o adesivo.'; return; }
   var fd = new FormData();
-  fd.append('codigo', COD); fd.append('nome', nome); fd.append('telefone', tel); fd.append('modelo', modelo); fd.append('placa', placa);
+  fd.append('codigo', COD); fd.append('nome', nome); fd.append('telefone', tel); fd.append('categoria', CAT); fd.append('modelo', modelo); fd.append('placa', placa);
   fd.append('foto', FOTO, 'adesivo.jpg');
   var bt = document.getElementById('v-ok'); bt.disabled = true; bt.textContent = 'Enviando a foto…'; er.textContent = '';
   apiPub('/veiculo', { method: 'POST', body: fd }).then(resultado)
@@ -88,15 +103,15 @@ function resultado(r){
     + '<p>Obrigado por manter o Tôa Tôa com você pelas ruas de Porto Seguro.</p>'
     + '<p>Seu veículo foi registrado e o adesivo de parceiro Tôa Tôa está confirmado.<br>Esse acompanhamento acontece periodicamente.</p>'
     + '<p>Obrigado pela parceria e por fazer parte do Tôa Tôa! 💛</p>'
-    + '<p class="dica" style="margin-top:14px">Veículo ' + esc(fmtPlaca(r.placa)) + ' · adesivo válido até ' + dBr(r.vencimento) + '</p>';
+    + '<p class="dica" style="margin-top:14px">Veículo ' + esc(fmtPlaca(r.placa)) + ' · ' + esc(CAT_VEICULO[r.categoria] || '') + ' · adesivo válido até ' + dBr(r.vencimento) + '</p>';
   if (!r.vale) {
-    var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(r.nome) + '&tel=' + encodeURIComponent(r.telefone) + '&placa=' + encodeURIComponent(r.placa);
+    var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(r.nome) + '&tel=' + encodeURIComponent(r.telefone) + '&placa=' + encodeURIComponent(r.placa) + '&cat=' + encodeURIComponent(r.categoria || CAT);
     h += '<p style="margin-top:14px">Falta só o cadastro do vale refeição, com este mesmo telefone e placa.</p>'
       + '<a class="bt-mar bt-grande" style="display:block;text-decoration:none;text-align:center" href="cadastro.html?' + q + '">Fazer o cadastro do vale</a>';
   } else if (r.vale.placa_diferente) {
     h += '<p class="dica">Seu cadastro do vale está com outra placa. Peça ao supervisor para corrigir para ' + esc(fmtPlaca(r.placa)) + '.</p>';
   } else if (r.vale.status === 'ativo') {
-    h += '<p class="dica">Seu vale refeição está ativo. Na hora do almoço, apresente o vale no caixa para retirar a ficha.</p>';
+    h += '<p class="dica">Seu vale refeição está ativo. Na hora do almoço, o caixa libera e entrega o seu vale.</p>';
   } else {
     h += '<p class="dica">Seu cadastro do vale está como ' + esc(STATUS_NOME[r.vale.status] || r.vale.status) + '. Fale com o supervisor.</p>';
   }

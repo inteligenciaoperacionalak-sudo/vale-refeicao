@@ -1,8 +1,13 @@
 // Vale Refeição — funções comuns às páginas
 var API = window.VR_API || 'https://wughmiprdbycsmkjsslj.supabase.co/functions/v1/vale/api';
 
-var CATEGORIAS = { uber: 'Uber', taxista: 'Taxista', guia: 'Guia', motorista: 'Motorista', prefeitura: 'Prefeitura' };
+// "uber" é a chave interna (banco); o nome mostrado é "Aplicativo"
+var CATEGORIAS = { uber: 'Aplicativo', taxista: 'Taxista', guia: 'Guia', motorista: 'Motorista', prefeitura: 'Prefeitura' };
+var CAT_VEICULO = { taxista: 'Taxista', uber: 'Motorista de aplicativo' };
 var COM_ADESIVO = { uber: true, taxista: true };
+var PERFIL_NOME = { caixa: 'Caixa', supervisor: 'Supervisor', admin: 'Administrativo' };
+// Quem libera o almoço de cada categoria
+var CATS_TELA = { supervisor: ['guia', 'motorista'], caixa: ['prefeitura', 'uber', 'taxista'] };
 var STATUS_NOME = { ativo: 'Ativo', pendente: 'Pendente', renovacao: 'Renovação', inativo: 'Inativo', vencido: 'Vencido', vencendo: 'Vencendo' };
 var MESES_TXT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -73,7 +78,8 @@ function apiPub(caminho, opts){
 }
 
 // ---------------------------------------------------------- login por PIN ---
-// Usado pelo caixa e pelo painel. Guarda o PIN no aparelho depois do primeiro acesso.
+// Usado pelas telas de liberação (caixa e supervisor) e pelo painel administrativo.
+// Guarda o PIN no aparelho depois do primeiro acesso.
 var SESSAO = { perfil: '', pin: '' };
 function apiAuth(caminho, opts){
   opts = opts || {};
@@ -85,12 +91,13 @@ function apiAuth(caminho, opts){
   });
 }
 
-// Tela de PIN. perfis: lista de perfis aceitos, o primeiro é o principal (ex.: ['caixa','supervisor']).
+// Tela de PIN. perfis: lista de perfis aceitos, o primeiro é o principal (ex.: ['caixa','admin']).
 function telaPin(app, estado, perfis, msg, aoEntrar){
   var principal = perfis[0], nomeP = estado.perfis[principal].nome;
   if (!estado.perfis[principal].temPin) { telaCriarPin(app, estado, principal, false, aoEntrar); return; }
+  var outros = perfis.slice(1).filter(function(pf){ return estado.perfis[pf] && estado.perfis[pf].temPin; }).map(function(pf){ return estado.perfis[pf].nome; });
   app.innerHTML = '<div class="centro"><h2>Entrar como ' + esc(nomeP) + '</h2>'
-    + '<p>Digite o PIN do ' + esc(nomeP) + (perfis.length > 1 ? ' (o PIN do Supervisor também entra)' : '') + '.</p>'
+    + '<p>Digite o PIN do ' + esc(nomeP) + '.' + (outros.length ? ' O PIN ' + esc(outros.join(' ou ')) + ' também entra.' : '') + '</p>'
     + '<input type="password" id="l-pin" inputmode="numeric" autocomplete="current-password" aria-label="PIN">'
     + '<div class="erro">' + esc(msg || '') + '</div>'
     + '<button class="bt-mar" id="l-ok">Entrar</button>'

@@ -13,7 +13,8 @@
 <main class="estreita" id="app"><p class="msg">Carregando…</p></main>
 <script src="comum.js"></script>
 <script>
-// Cada supervisor tem dois QRs, que abrem direto o formulário certo (cadastro.html ou veiculo.html).
+// Entrada da equipe: três acessos, cada um com o seu PIN.
+// Parceiros não passam por aqui: entram pelos QRs do supervisor (cadastro.html / veiculo.html).
 // Um link antigo com ?s= cai aqui e segue para o cadastro do vale.
 var app = document.getElementById('app');
 var COD = param('s').toUpperCase();
@@ -22,8 +23,9 @@ if (COD) {
 } else {
   app.innerHTML = '<h2>Equipe da Cabana</h2><p class="msg" style="margin-top:6px">Parceiros entram pelo QR do supervisor: um para o cadastro do vale, outro para o adesivo no veículo.</p>'
     + '<div class="entrada-qr">'
-    + '<a class="bt-entrada" href="caixa.html"><b>Caixa</b><span>Buscar o parceiro e liberar o almoço do dia.</span></a>'
-    + '<a class="bt-entrada" href="painel.html"><b>Painel</b><span>Cadastros, adesivos, renovações, almoços e QRs dos supervisores.</span></a>'
+    + '<a class="bt-entrada" href="supervisor.html"><b>Supervisor</b><span>Guias e motoristas: conferir o grupo, liberar o almoço e entregar o vale.</span></a>'
+    + '<a class="bt-entrada" href="caixa.html"><b>Caixa</b><span>Prefeitura, aplicativo e taxista: liberar o almoço e entregar o vale.</span></a>'
+    + '<a class="bt-entrada" href="painel.html"><b>Administrativo</b><span>Cadastros, adesivos, renovações, relatório de almoços, QRs dos supervisores e planilhas.</span></a>'
     + '</div>';
 }
 </script>
