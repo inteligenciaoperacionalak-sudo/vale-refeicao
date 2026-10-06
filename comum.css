@@ -108,6 +108,8 @@ a{color:var(--mar)}
 .num.alerta b{color:var(--verm)}
 .num.aviso{border-color:var(--ambar);background:var(--ambar-claro)}
 .num.aviso b{color:var(--ambar-texto)}
+.num.ok{border-color:var(--verde);background:var(--verde-claro)}
+.num.ok b{color:var(--verde-escuro)}
 button.num{cursor:pointer}
 button.num:hover{border-color:var(--tinta)}
 button.num.on{box-shadow:inset 0 0 0 2px var(--tinta);border-color:var(--tinta)}
@@ -138,9 +140,28 @@ button.num.on::after{content:'filtrando';position:absolute;right:8px;top:8px;fon
 .res .linha.ja .tit{color:var(--cinza)}
 .fora{font-size:13px;color:var(--cinza);background:var(--papel);border-radius:8px;padding:10px 12px;margin:8px 0 10px}
 .fora b{color:var(--tinta)}
-.hoje{margin-top:26px}
+.hoje{margin-top:18px}
 .hoje summary{font-size:15px;font-weight:700;cursor:pointer;padding:6px 0}
 .hoje .linha{padding:8px 0}
+.hoje .bloco-tit{margin-top:14px}
+.so-leitura{font-weight:600;color:var(--cinza);background:var(--cinza-claro);border-radius:99px;padding:1px 8px;margin-left:4px;text-transform:none}
+.linha.desfeito .tit{text-decoration:line-through;color:var(--cinza);font-weight:600}
+
+/* conferência dos vales (tela do caixa) */
+.conf{background:var(--branco);border:1px solid var(--linha);border-radius:12px;padding:14px 16px;margin-top:22px}
+.conf.ok{border-color:var(--verde);background:var(--verde-claro)}
+.conf.falta{border-color:var(--verm);background:var(--verm-claro)}
+.conf.sobra{border-color:var(--ambar);background:var(--ambar-claro)}
+.conf-tit{font-size:13px;font-weight:800;color:var(--cinza);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.conf-num{font-size:18px;font-weight:600;line-height:1.3}
+.conf.ok .conf-num b{color:var(--verde-escuro)}
+.conf.falta .conf-num b{color:var(--verm)}
+.conf.sobra .conf-num b{color:var(--ambar-texto)}
+.conf.form label{margin-top:10px}
+.conf-previa{min-height:1.4em;font-size:15px;font-weight:700;margin-top:8px}
+.conf-previa.ok{color:var(--verde-escuro)}
+.conf-previa.falta{color:var(--verm)}
+.conf-previa.sobra{color:var(--ambar-texto)}
 
 /* formulário do parceiro */
 .form-parceiro h2{margin-bottom:6px}

@@ -45,7 +45,7 @@ var EST = null, D = null;
 var VIEW = lerLS('vr_view') || 'uber';
 var FILTRO = null;            // filtro ligado por um dos cards de resumo
 var BUSCA = '', ABERTO = null, EDIT = null, QR_ABERTO = null;
-var REL = { de: '', ate: '', dados: null, diaAberto: null };
+var REL = { de: '', ate: '', dados: null, diaAberto: null, confEdit: null };
 var EXP = null;               // o que "Exportar planilha" baixa, montado junto com a aba (respeita busca e filtro)
 
 // Abas: as de categoria e, destacadas, as do sistema (Almoços e Supervisores)
@@ -98,6 +98,10 @@ function msgZap(v){
     + '. Para continuar com o almoço, é preciso renovar o adesivo e registrar de novo com o supervisor. Qualquer dúvida, fale com a gente.';
 }
 function telDisparo(t){ t = String(t || '').replace(/\D/g, ''); return t ? '55' + t : ''; }
+// Conferência dos vales: diferença = vales recebidos − almoços no sistema (na hora da conferência)
+function textoDif(dif){ return dif === 0 ? 'Bateu' : dif < 0 ? 'Falta ' + (-dif) : 'Sobra ' + dif; }
+function classeDif(dif){ return dif === 0 ? 'ok' : dif < 0 ? 'falta' : 'sobra'; }
+function difConf(c){ return c.vales - c.almocos_sistema; }
 
 // ------------------------------------------------------------- render ---
 function contagens(){
@@ -113,6 +117,12 @@ function card(k, n, rotulo, cls){
   var on = FILTRO === k && filtroAtivoAqui();
   return '<button type="button" class="num' + (cls ? ' ' + cls : '') + (on ? ' on' : '') + '" data-card="' + k + '" aria-pressed="' + on + '"><b>' + n + '</b><span>' + rotulo + '</span></button>';
 }
+function cardConferencia(){
+  var c = D.conferencia_hoje;
+  if (!c) return card('conferencia', '—', 'conferência de hoje · não feita', D.almocos_hoje ? 'aviso' : '');
+  var dif = difConf(c);
+  return card('conferencia', textoDif(dif), 'conferência de hoje · ' + c.vales + ' vale' + (c.vales === 1 ? '' : 's') + ' / ' + c.almocos_sistema + ' almoço' + (c.almocos_sistema === 1 ? '' : 's'), dif === 0 ? 'ok' : dif < 0 ? 'alerta' : 'aviso');
+}
 
 function render(){
   topo();
@@ -122,7 +132,8 @@ function render(){
     + card('vencendo', c.vencendo, 'vencendo em ' + D.aviso_dias + ' dias', c.vencendo ? 'aviso' : '')
     + card('renovacao', c.renovacao, 'precisam renovar', c.renovacao ? 'alerta' : '')
     + card('pendente', c.pendentes, 'pendentes', c.pendentes ? 'aviso' : '')
-    + card('almocos_hoje', D.almocos_hoje, 'almoços hoje', '')
+    + card('almocos_hoje', D.almocos_hoje, 'almoços hoje' + (D.desfeitos_hoje ? ' · ' + D.desfeitos_hoje + ' desfeito' + (D.desfeitos_hoje > 1 ? 's' : '') : ''), '')
+    + cardConferencia()
     + '</div>';
   h += '<div class="abas"><div class="grupo">';
   for (var i = 0; i < ABAS.length; i++) {
@@ -145,7 +156,7 @@ function irPara(v){
 
 // Card clicado: filtra a aba atual, ou leva para a aba onde aquele número faz sentido
 function clicarCard(f){
-  if (f === 'almocos_hoje') {
+  if (f === 'almocos_hoje' || f === 'conferencia') {
     FILTRO = null; VIEW = 'almocos'; gravarLS('vr_view', VIEW); ABERTO = null; EDIT = null; BUSCA = '';
     REL.de = D.hoje; REL.ate = D.hoje; REL.dados = null; REL.diaAberto = null;
     render(); carregarRelatorio();
@@ -390,35 +401,74 @@ function htmlAlmocos(){
     + '<div><label for="r-ate">Até</label><input type="date" id="r-ate" value="' + esc(REL.ate) + '"></div>'
     + '<button class="bt-mar" id="r-ok">Ver almoços</button>'
     + (REL.dados && REL.dados.almocos.length ? btExportar() : '') + '</div>'
-    + '<p class="msg">Conta só o que foi liberado nas telas do Supervisor (guias e motoristas) e do Caixa (prefeitura, aplicativo e taxista). Quem tem cadastro e não almoçou não entra.</p>';
+    + '<p class="msg">Conta o que foi liberado nas telas do Supervisor (guias e motoristas) e do Caixa (prefeitura, aplicativo e taxista); os desfeitos ficam marcados e fora do total. A conferência compara os vales físicos recebidos com o sistema.</p>';
   if (REL.dados) {
-    var a = REL.dados.almocos;
-    EXP = { arquivo: 'almocos-' + REL.de + '-a-' + REL.ate, aba: 'Almoços', colunas: [['Data', 12], ['Hora', 8], ['Nome', 30], ['Categoria', 13], ['Liberado por', 14]],
-      linhas: a.slice().reverse().map(function(x){ return [dBr(x.data), horaBR(x.hora), x.nome, CATEGORIAS[x.categoria] || x.categoria, PERFIL_NOME[x.liberado_por] || x.liberado_por || '']; }) };
-    if (!a.length) h += '<div class="vazio"><span class="msg">Nenhum almoço liberado no período.</span></div>';
+    var todos = REL.dados.almocos, a = todos.filter(function(x){ return !x.desfeito_em; });
+    var confs = {}; (REL.dados.conferencias || []).forEach(function(c){ confs[c.data] = c; });
+    var porCat = {}, porDia = {}, dias = [];
+    for (var i = 0; i < todos.length; i++) {
+      var x = todos[i];
+      if (!porDia[x.data]) { porDia[x.data] = { total: 0, cats: {}, lista: [], desfeitos: [] }; dias.push(x.data); }
+      if (x.desfeito_em) { porDia[x.data].desfeitos.push(x); continue; }
+      porCat[x.categoria] = (porCat[x.categoria] || 0) + 1;
+      porDia[x.data].total++; porDia[x.data].cats[x.categoria] = (porDia[x.data].cats[x.categoria] || 0) + 1; porDia[x.data].lista.push(x);
+    }
+    // dias que só têm conferência (sem almoço) também aparecem
+    Object.keys(confs).forEach(function(dt){ if (!porDia[dt]) { porDia[dt] = { total: 0, cats: {}, lista: [], desfeitos: [] }; dias.push(dt); } });
+    dias.sort().reverse();
+    var cs = ['guia', 'motorista', 'uber', 'taxista', 'prefeitura'];
+    var situacao = function(x){ return x.desfeito_em ? 'Desfeito ' + horaBR(x.desfeito_em) + ' pelo ' + (PERFIL_NOME[x.desfeito_por] || x.desfeito_por || '') : 'Ativo'; };
+    EXP = { arquivo: 'almocos-' + REL.de + '-a-' + REL.ate, aba: 'Almoços',
+      colunas: [['Data', 12], ['Hora', 8], ['Nome', 30], ['Categoria', 13], ['Liberado por', 14], ['Situação', 26], ['Vales conferidos (dia)', 20], ['Diferença (dia)', 16]],
+      linhas: todos.slice().reverse().map(function(x){ var c = confs[x.data]; return [dBr(x.data), horaBR(x.hora), x.nome, CATEGORIAS[x.categoria] || x.categoria, PERFIL_NOME[x.liberado_por] || x.liberado_por || '', situacao(x), c ? c.vales : '', c ? textoDif(difConf(c)) : 'não conferida']; }) };
+    if (!dias.length) h += '<div class="vazio"><span class="msg">Nenhum almoço liberado no período.</span></div>';
     else {
-      var porCat = {}, porDia = {}, dias = [];
-      for (var i = 0; i < a.length; i++) {
-        porCat[a[i].categoria] = (porCat[a[i].categoria] || 0) + 1;
-        if (!porDia[a[i].data]) { porDia[a[i].data] = { total: 0, cats: {}, lista: [] }; dias.push(a[i].data); }
-        porDia[a[i].data].total++; porDia[a[i].data].cats[a[i].categoria] = (porDia[a[i].data].cats[a[i].categoria] || 0) + 1; porDia[a[i].data].lista.push(a[i]);
-      }
-      h += '<div class="numeros" style="margin-top:14px"><div class="num"><b>' + a.length + '</b><span>almoços no período</span></div>';
-      var cs = ['guia', 'motorista', 'uber', 'taxista', 'prefeitura'];
+      var nConf = 0, nDif = 0, nDesf = todos.length - a.length;
+      dias.forEach(function(dt){ if (confs[dt]) { nConf++; if (difConf(confs[dt]) !== 0) nDif++; } });
+      h += '<div class="numeros" style="margin-top:14px"><div class="num"><b>' + a.length + '</b><span>almoços no período' + (nDesf ? ' · ' + nDesf + ' desfeito' + (nDesf > 1 ? 's' : '') : '') + '</span></div>';
       for (var c = 0; c < cs.length; c++) if (porCat[cs[c]]) h += '<div class="num"><b>' + porCat[cs[c]] + '</b><span>' + CATEGORIAS[cs[c]] + '</span></div>';
-      h += '</div><table class="tabela"><thead><tr><th>Dia</th><th class="n">Total</th><th>Por categoria</th></tr></thead><tbody>';
+      h += '<div class="num' + (nConf < dias.length ? ' aviso' : '') + '"><b>' + nConf + '/' + dias.length + '</b><span>dias conferidos</span></div>';
+      h += '<div class="num' + (nDif ? ' alerta' : (nConf ? ' ok' : '')) + '"><b>' + nDif + '</b><span>dias com diferença</span></div>';
+      h += '</div><table class="tabela"><thead><tr><th>Dia</th><th class="n">Total</th><th>Por categoria</th><th class="n">Vales</th><th>Conferência</th></tr></thead><tbody>';
       for (var d = 0; d < dias.length; d++) {
-        var dia = porDia[dias[d]], partes = [];
+        var dt = dias[d], dia = porDia[dt], cf = confs[dt], partes = [];
         for (var k = 0; k < cs.length; k++) if (dia.cats[cs[k]]) partes.push(dia.cats[cs[k]] + ' ' + CATEGORIAS[cs[k]]);
-        h += '<tr class="clic" data-dia="' + dias[d] + '"><td>' + dBr(dias[d]) + ' ' + (REL.diaAberto === dias[d] ? '▴' : '▾') + '</td><td class="n"><b>' + dia.total + '</b></td><td>' + esc(partes.join(' · ')) + '</td></tr>';
-        if (REL.diaAberto === dias[d]) {
-          h += '<tr><td colspan="3"><div class="dia-lista">';
+        if (dia.desfeitos.length) partes.push('<span style="color:var(--cinza)">' + dia.desfeitos.length + ' desfeito' + (dia.desfeitos.length > 1 ? 's' : '') + '</span>');
+        h += '<tr class="clic" data-dia="' + dt + '"><td>' + dBr(dt) + ' ' + (REL.diaAberto === dt ? '▴' : '▾') + '</td><td class="n"><b>' + dia.total + '</b></td><td>' + partes.join(' · ') + '</td>'
+          + '<td class="n">' + (cf ? cf.vales : '<span style="color:var(--cinza)">—</span>') + '</td>'
+          + '<td>' + (cf ? '<span class="pill ' + (difConf(cf) === 0 ? 'ativo' : difConf(cf) < 0 ? 'renovacao' : 'pendente') + '">' + esc(textoDif(difConf(cf))) + '</span>' : '<span class="pill neutro">não conferida</span>') + '</td></tr>';
+        if (REL.diaAberto === dt) {
+          h += '<tr><td colspan="5"><div class="dia-lista">' + htmlConfDia(dt, dia, cf);
           for (var m = 0; m < dia.lista.length; m++) h += '<div class="linha"><div class="txt"><div class="tit" style="font-size:14px">' + esc(dia.lista[m].nome) + '</div><div class="sub">' + esc(CATEGORIAS[dia.lista[m].categoria] || dia.lista[m].categoria) + ' · ' + horaBR(dia.lista[m].hora) + (dia.lista[m].liberado_por ? ' · ' + esc(PERFIL_NOME[dia.lista[m].liberado_por] || dia.lista[m].liberado_por) : '') + '</div></div></div>';
+          for (var q = 0; q < dia.desfeitos.length; q++) { var ds = dia.desfeitos[q]; h += '<div class="linha desfeito"><div class="txt"><div class="tit" style="font-size:14px">' + esc(ds.nome) + '</div><div class="sub">' + esc(CATEGORIAS[ds.categoria] || ds.categoria) + ' · liberado ' + horaBR(ds.hora) + ' · desfeito ' + horaBR(ds.desfeito_em) + ' pelo ' + esc(PERFIL_NOME[ds.desfeito_por] || ds.desfeito_por || '') + '</div></div></div>'; }
           h += '</div></td></tr>';
         }
       }
       h += '</tbody></table>';
     }
+  }
+  return h + '</div>';
+}
+
+// Conferência de um dia dentro do relatório: resultado + formulário para lançar ou corrigir
+function htmlConfDia(dt, dia, cf){
+  var h = '<div class="conf' + (cf ? ' ' + classeDif(difConf(cf)) : '') + '" style="margin:6px 0 10px">';
+  if (cf) {
+    var depois = dia.lista.filter(function(x){ return Date.parse(x.hora) > Date.parse(cf.hora); }).length;
+    h += '<div class="conf-tit">Conferência · ' + horaBR(cf.hora) + ' · ' + esc(PERFIL_NOME[cf.perfil] || cf.perfil) + '</div>'
+      + '<div class="conf-num">Sistema ' + cf.almocos_sistema + ' · Vales recebidos ' + cf.vales + ' · <b>' + textoDif(difConf(cf)) + '</b></div>'
+      + (cf.observacao ? '<div class="msg" style="margin:4px 0 0">' + esc(cf.observacao) + '</div>' : '')
+      + (depois ? '<div class="msg" style="margin:4px 0 0">' + depois + ' almoço' + (depois > 1 ? 's' : '') + ' liberado' + (depois > 1 ? 's' : '') + ' depois da conferência (hoje o dia tem ' + dia.total + ').</div>' : '');
+  } else {
+    h += '<div class="conf-tit">Conferência</div><div class="msg" style="margin:0">Não feita. O caixa confere na tela dele ao fim do almoço; o administrativo pode lançar aqui.</div>';
+  }
+  if (REL.confEdit === dt) {
+    h += '<div class="grade" style="margin-top:8px"><div><label for="k-vales">Vales recebidos</label><input type="number" id="k-vales" min="0" max="9999" value="' + (cf ? cf.vales : '') + '"></div>'
+      + '<div><label for="k-obs">Observação (opcional)</label><input type="text" id="k-obs" maxlength="200" value="' + esc(cf && cf.observacao ? cf.observacao : '') + '"></div></div>'
+      + '<p class="dica">O sistema grava a quantidade de almoços ativos deste dia no momento em que você salvar (' + dia.total + ' agora).</p>'
+      + '<div class="acoes"><button class="bt-mar bt-mini" data-confsalvar="' + dt + '">Gravar conferência</button><button class="bt-cinza bt-mini" data-confcancelar="1">Cancelar</button></div>';
+  } else {
+    h += '<div class="acoes" style="margin-top:10px"><button class="bt-cinza bt-mini" data-confeditar="' + dt + '">' + (cf ? 'Corrigir conferência' : 'Lançar conferência') + '</button></div>';
   }
   return h + '</div>';
 }
@@ -428,7 +478,7 @@ function buscarRelatorio(){
   carregarRelatorio();
 }
 function carregarRelatorio(){
-  apiAuth('/almocos?de=' + REL.de + '&ate=' + REL.ate).then(function(d){ REL.dados = d; REL.diaAberto = d.almocos.length && d.de === d.ate ? d.de : null; if (VIEW === 'almocos') renderConteudo(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+  apiAuth('/almocos?de=' + REL.de + '&ate=' + REL.ate).then(function(d){ REL.dados = d; if (!(REL.diaAberto && d.de !== d.ate)) REL.diaAberto = (d.almocos.length || (d.conferencias || []).length) && d.de === d.ate ? d.de : null; if (VIEW === 'almocos') renderConteudo(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
 }
 
 // -------------------------------------------------------- supervisores ---
@@ -538,7 +588,21 @@ function ligar(){
   // almoços
   var rok = document.getElementById('r-ok'); if (rok) rok.onclick = buscarRelatorio;
   var ds = box.querySelectorAll('[data-dia]');
-  for (var m = 0; m < ds.length; m++) ds[m].onclick = function(){ var d = this.getAttribute('data-dia'); REL.diaAberto = REL.diaAberto === d ? null : d; renderConteudo(); };
+  for (var m = 0; m < ds.length; m++) ds[m].onclick = function(){ var d = this.getAttribute('data-dia'); REL.diaAberto = REL.diaAberto === d ? null : d; REL.confEdit = null; renderConteudo(); };
+  var ce = box.querySelector('[data-confeditar]');
+  if (ce) ce.onclick = function(){ REL.confEdit = this.getAttribute('data-confeditar'); renderConteudo(); var kv = document.getElementById('k-vales'); if (kv) kv.focus(); };
+  var ccf = box.querySelector('[data-confcancelar]');
+  if (ccf) ccf.onclick = function(){ REL.confEdit = null; renderConteudo(); };
+  var cs_ = box.querySelector('[data-confsalvar]');
+  if (cs_) cs_.onclick = function(){
+    var dt = this.getAttribute('data-confsalvar'), v = parseInt(document.getElementById('k-vales').value, 10);
+    if (isNaN(v) || v < 0) { toast('Digite a quantidade de vales recebidos.'); return; }
+    cs_.disabled = true;
+    apiAuth('/conferencias', { method: 'POST', body: { data: dt, vales: v, observacao: document.getElementById('k-obs').value } }).then(function(r){
+      REL.confEdit = null; toast('Conferência gravada: ' + textoDif(difConf(r.conferencia)) + '.');
+      carregarRelatorio(); if (dt === D.hoje) carregar();
+    }).catch(function(e){ cs_.disabled = false; if (e.message !== '401') toast(e.message); });
+  };
 
   // supervisores
   var sadd = document.getElementById('s-add');

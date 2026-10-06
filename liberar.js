@@ -9,6 +9,8 @@ var PERFIS_TELA = [TELA.perfil, 'admin'];
 var Q_TELA = 'tela=' + TELA.perfil;
 var OUTRA = TELA.perfil === 'caixa' ? 'Supervisor' : 'Caixa';
 var EST = null, HOJE = null, RES = [], FORA = [], SEL = null, TERMO = '', timer = null, ULT_BUSCA = 0;
+var DIA = null;            // resposta de /caixa/hoje (na tela do caixa traz o dia inteiro e a conferência)
+var CONF_ABERTA = false;   // formulário da conferência aberto
 
 function nomeCats(){ return CATS_TELA[TELA.perfil].map(function(c){ return CATEGORIAS[c]; }).join(', ').replace(/, ([^,]*)$/, ' e $1'); }
 
@@ -36,6 +38,7 @@ function entrar(){
     + '<div class="busca"><input type="search" id="q" placeholder="Nome, placa ou telefone" autocomplete="off" aria-label="Buscar parceiro" value="' + esc(TERMO) + '">'
     + '<button class="limpar" id="q-limpar" aria-label="Limpar" hidden>&times;</button></div>'
     + '<div id="veredito"></div><div id="res"></div>'
+    + '<div id="conf"></div>'
     + '<details class="hoje" id="hoje"><summary>Almoços de hoje</summary><div id="hoje-lista"></div></details>';
   var q = document.getElementById('q');
   q.oninput = function(){
@@ -68,18 +71,102 @@ function buscar(){
 
 function carregarHoje(){
   apiAuth('/caixa/hoje?' + Q_TELA).then(function(d){
-    HOJE = d.hoje;
+    HOJE = d.hoje; DIA = d;
     var box = document.getElementById('hoje-lista'), det = document.getElementById('hoje');
     if (!box) return;
-    det.querySelector('summary').textContent = 'Almoços de hoje · ' + d.almocos.length;
-    var h = '';
-    if (!d.almocos.length) h = '<p class="msg">Nenhum almoço liberado hoje ainda.</p>';
-    for (var i = 0; i < d.almocos.length; i++) {
-      var a = d.almocos[i];
-      h += '<div class="linha"><div class="txt"><div class="tit">' + esc(a.nome) + '</div><div class="sub">' + esc(CATEGORIAS[a.categoria] || a.categoria) + ' · ' + horaBR(a.hora) + '</div></div></div>';
+    if (d.resumo) renderDiaCaixa(d, box, det);
+    else {
+      det.querySelector('summary').textContent = 'Almoços de hoje · ' + d.almocos.length;
+      box.innerHTML = d.almocos.length ? linhasAlmoco(d.almocos) : '<p class="msg">Nenhum almoço liberado hoje ainda.</p>';
     }
-    box.innerHTML = h;
+    renderConf();
   }).catch(function(){});
+}
+
+function linhasAlmoco(lista, soLeitura){
+  var h = '';
+  for (var i = 0; i < lista.length; i++) {
+    var a = lista[i];
+    h += '<div class="linha"><div class="txt"><div class="tit">' + esc(a.nome) + '</div><div class="sub">' + esc(CATEGORIAS[a.categoria] || a.categoria) + ' · ' + horaBR(a.hora) + (soLeitura ? ' · liberado pelo ' + esc(PERFIL_NOME[a.liberado_por] || a.liberado_por) : '') + '</div></div></div>';
+  }
+  return h;
+}
+
+// Tela do caixa: o dia inteiro, em dois blocos. O bloco dos supervisores é só leitura (liberar e desfazer continuam por categoria).
+function renderDiaCaixa(d, box, det){
+  var r = d.resumo;
+  det.querySelector('summary').textContent = 'Almoços de hoje · ' + r.total;
+  var meus = d.todos.filter(function(a){ return CATS_TELA.caixa.indexOf(a.categoria) >= 0; });
+  var deles = d.todos.filter(function(a){ return CATS_TELA.supervisor.indexOf(a.categoria) >= 0; });
+  var h = '<p class="msg" style="margin-top:4px">' + r.total + ' no total · ' + r.caixa + ' caixa · ' + r.supervisor + ' supervisores' + (d.desfeitos.length ? ' · ' + d.desfeitos.length + ' desfeito' + (d.desfeitos.length > 1 ? 's' : '') : '') + '</p>';
+  if (!r.total && !d.desfeitos.length) h += '<p class="msg">Nenhum almoço liberado hoje ainda.</p>';
+  h += '<div class="bloco-tit">Caixa · prefeitura, aplicativo e taxista (' + meus.length + ')</div>' + (meus.length ? linhasAlmoco(meus) : '<p class="msg">Nenhum.</p>');
+  h += '<div class="bloco-tit">Supervisores · guias e motoristas (' + deles.length + ') <span class="so-leitura">só leitura</span></div>' + (deles.length ? linhasAlmoco(deles, true) : '<p class="msg">Nenhum.</p>');
+  if (d.desfeitos.length) {
+    h += '<div class="bloco-tit">Desfeitos (' + d.desfeitos.length + ')</div>';
+    for (var i = 0; i < d.desfeitos.length; i++) {
+      var a = d.desfeitos[i];
+      h += '<div class="linha desfeito"><div class="txt"><div class="tit">' + esc(a.nome) + '</div><div class="sub">' + esc(CATEGORIAS[a.categoria] || a.categoria) + ' · liberado ' + horaBR(a.hora) + ' · desfeito ' + horaBR(a.desfeito_em) + ' pelo ' + esc(PERFIL_NOME[a.desfeito_por] || a.desfeito_por) + '</div></div></div>';
+    }
+  }
+  box.innerHTML = h;
+}
+
+// ------------------------------------------------- conferência dos vales (tela do caixa) ---
+function textoDif(dif){ return dif === 0 ? 'Bateu' : dif < 0 ? 'Falta ' + (-dif) : 'Sobra ' + dif; }
+function classeDif(dif){ return dif === 0 ? 'ok' : dif < 0 ? 'falta' : 'sobra'; }
+
+function renderConf(){
+  var box = document.getElementById('conf');
+  if (!box) return;
+  if (!DIA || !DIA.resumo) { box.innerHTML = ''; return; }
+  var c = DIA.conferencia, total = DIA.resumo.total, h;
+  if (CONF_ABERTA) {
+    h = '<div class="conf form"><div class="conf-tit">Conferir vales recebidos</div>'
+      + '<p class="msg" style="margin:0 0 6px">Conte os vales físicos que voltaram do almoço e digite a quantidade. O sistema tem <b>' + total + '</b> almoço' + (total === 1 ? '' : 's') + ' liberado' + (total === 1 ? '' : 's') + ' hoje.</p>'
+      + '<label for="cf-vales">Vales recebidos</label><input type="number" id="cf-vales" inputmode="numeric" min="0" max="9999" value="' + (c ? c.vales : '') + '">'
+      + '<div class="conf-previa" id="cf-previa"></div>'
+      + '<label for="cf-obs">Observação <span class="opc">(opcional)</span></label><input type="text" id="cf-obs" maxlength="200" placeholder="ex.: 1 vale rasgado" value="' + esc(c && c.observacao ? c.observacao : '') + '">'
+      + '<div class="acoes"><button class="bt-mar" id="cf-ok">Gravar conferência</button><button class="bt-cinza" id="cf-cancelar">Cancelar</button></div></div>';
+    box.innerHTML = h;
+    var inp = document.getElementById('cf-vales');
+    var previa = function(){
+      var v = parseInt(inp.value, 10), el = document.getElementById('cf-previa');
+      if (isNaN(v)) { el.textContent = ''; el.className = 'conf-previa'; return; }
+      var dif = v - total; el.className = 'conf-previa ' + classeDif(dif);
+      el.textContent = 'Sistema ' + total + ' · Vales ' + v + ' → ' + textoDif(dif);
+    };
+    inp.oninput = previa; previa(); inp.focus();
+    document.getElementById('cf-cancelar').onclick = function(){ CONF_ABERTA = false; renderConf(); };
+    document.getElementById('cf-ok').onclick = gravarConf;
+    return;
+  }
+  if (c) {
+    var dif = c.vales - c.almocos_sistema;
+    var depois = DIA.todos.filter(function(a){ return Date.parse(a.hora) > Date.parse(c.hora); }).length;
+    h = '<div class="conf ' + classeDif(dif) + '"><div class="conf-tit">Conferência do dia · ' + horaBR(c.hora) + ' · ' + esc(PERFIL_NOME[c.perfil] || c.perfil) + '</div>'
+      + '<div class="conf-num">Sistema ' + c.almocos_sistema + ' · Vales recebidos ' + c.vales + ' · <b>' + textoDif(dif) + '</b></div>'
+      + (c.observacao ? '<div class="msg" style="margin:4px 0 0">' + esc(c.observacao) + '</div>' : '')
+      + (depois ? '<div class="msg" style="margin:4px 0 0">' + depois + ' almoço' + (depois > 1 ? 's' : '') + ' liberado' + (depois > 1 ? 's' : '') + ' depois da conferência (agora ' + total + ' no sistema).</div>' : '')
+      + '<div class="acoes" style="margin-top:10px"><button class="bt-cinza bt-mini" id="cf-abrir">Refazer conferência</button></div></div>';
+  } else {
+    h = '<div class="conf"><div class="conf-tit">Conferência do dia</div>'
+      + '<p class="msg" style="margin:0">Ainda não feita. Ao fim do almoço, conte os vales que voltaram e compare com os ' + total + ' almoço' + (total === 1 ? '' : 's') + ' do sistema.</p>'
+      + '<div class="acoes" style="margin-top:10px"><button class="bt-mar bt-mini" id="cf-abrir">Conferir vales recebidos</button></div></div>';
+  }
+  box.innerHTML = h;
+  document.getElementById('cf-abrir').onclick = function(){ CONF_ABERTA = true; renderConf(); };
+}
+
+function gravarConf(){
+  var v = parseInt(document.getElementById('cf-vales').value, 10);
+  if (isNaN(v) || v < 0) { toast('Digite a quantidade de vales recebidos.'); return; }
+  var bt = document.getElementById('cf-ok'); bt.disabled = true;
+  apiAuth('/caixa/conferir', { method: 'POST', body: { tela: TELA.perfil, vales: v, observacao: document.getElementById('cf-obs').value } }).then(function(r){
+    CONF_ABERTA = false;
+    toast('Conferência gravada: ' + textoDif(r.conferencia.vales - r.conferencia.almocos_sistema) + '.');
+    carregarHoje();
+  }).catch(function(e){ bt.disabled = false; if (e.message !== '401') toast(e.message); });
 }
 
 // Quem bateu com a busca mas é liberado na outra tela

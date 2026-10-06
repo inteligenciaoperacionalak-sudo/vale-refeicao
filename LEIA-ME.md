@@ -12,7 +12,18 @@ O parceiro se cadastra uma vez pelo QR do supervisor. Na hora do almoço, quem l
 | **Caixa** | Prefeitura, Aplicativo, Taxista | `caixa.html` | PIN do caixa |
 | **Administrativo** | tudo (painel) | `painel.html` | PIN administrativo (também entra nas duas telas acima) |
 
-Cada tela só mostra as próprias categorias. Se a busca encontra alguém da outra tela, avisa ("Na tela do Caixa: Fulano (Aplicativo)") sem deixar liberar.
+Cada tela só mostra as próprias categorias na busca. Se a busca encontra alguém da outra tela, avisa ("Na tela do Caixa: Fulano (Aplicativo)") sem deixar liberar.
+
+## Conferência pós-almoço (auditoria dos vales)
+
+Os vales físicos são iguais para todas as categorias e voltam juntos ao fim do almoço, então a conferência é feita na **tela do Caixa**:
+
+- "Almoços de hoje" no caixa mostra o **total do dia** com a quebra (caixa · supervisores · desfeitos) e os nomes em dois blocos. O bloco dos supervisores é só leitura: liberar e desfazer continuam só nas categorias de cada tela.
+- **Conferir vales recebidos**: o caixa digita a quantidade de vales que voltou; o sistema compara com os almoços ativos e grava data, hora, perfil, número do sistema, vales, diferença (bateu / falta / sobra) e observação. Uma conferência por dia; refazer substitui.
+- **Corte**: a conferência guarda o número do sistema naquele momento. Almoços liberados depois aparecem à parte ("2 liberados depois da conferência").
+- **Desfazer não apaga**: o almoço fica marcado com hora e perfil de quem desfez, sai do total e aparece riscado na lista e no relatório.
+- **Painel**: card "Conferência de hoje" (bateu / falta N / sobra N / não feita), e na aba Almoços cada dia mostra vales conferidos e diferença; o administrativo lança ou corrige a conferência de qualquer dia. A planilha exportada traz situação (ativo/desfeito), vales conferidos e diferença.
+- Preparado para vales diferentes por tela: a tabela já tem `vales_caixa` e `vales_supervisor` (sem uso por enquanto).
 
 ## Páginas
 
@@ -22,7 +33,7 @@ Cada tela só mostra as próprias categorias. Se a busca encontra alguém da out
 | `cadastro.html?s=CÓDIGO` | Parceiro (QR Vale refeição do supervisor) | Cadastro do vale: nome, telefone, empresa (opcional), categoria; prefeitura pede o setor, aplicativo/taxista pede a placa |
 | `veiculo.html?s=CÓDIGO` | Taxista/aplicativo, com o supervisor conferindo (QR Marketing de Veículo) | Marketing de Veículo: nome, telefone, **taxista ou motorista de aplicativo**, modelo, placa e foto do carro com o adesivo. Registra aplicação ou renovação |
 | `supervisor.html` | Supervisores (PIN único) | Busca guias e motoristas, libera o almoço do dia e entrega o vale |
-| `caixa.html` | Caixa (PIN do caixa) | Busca prefeitura, aplicativo e taxista, libera o almoço do dia e entrega o vale |
+| `caixa.html` | Caixa (PIN do caixa) | Busca prefeitura, aplicativo e taxista, libera o almoço do dia e entrega o vale. Vê o total do dia e faz a conferência dos vales |
 | `painel.html` | Administrativo (PIN administrativo) | Abas Aplicativo e Taxistas / Guias e Motoristas / Prefeitura / Marketing de Veículo / Renovações e, destacadas, Almoços / Supervisores. Cards de resumo filtram as listas; cada aba exporta planilha Excel |
 
 Arquivos compartilhados: `comum.js` / `comum.css` (API, PIN, máscaras, estilos), `liberar.js` (lógica das telas do supervisor e do caixa), `xlsx.js` (gera o Excel no navegador, sem biblioteca externa), `qrcode.min.js`.
@@ -33,7 +44,7 @@ Arquivos compartilhados: `comum.js` / `comum.css` (API, PIN, máscaras, estilos)
 - **Guia, motorista e prefeitura**: Ativo ao cadastrar; o administrativo pode inativar/reativar. Inativo não aparece como liberável em nenhuma tela.
 - **Adesivo vale 6 meses** a partir da aplicação ou renovação. Essa data só muda pelo formulário do adesivo (com foto).
 - **Vencimento bloqueia sozinho**: no dia seguinte ao vencimento ninguém consegue liberar.
-- **1 almoço por dia** é garantido no banco (restrição única parceiro + data).
+- **1 almoço ativo por dia** é garantido no banco (índice único parceiro + data, ignorando os desfeitos).
 - **Telefone único**: um segundo cadastro com o mesmo número recebe "Já tem cadastro nesse número" (sem mostrar o nome de quem já está cadastrado).
 - **Relatório de almoços** por dia e por categoria, com quem liberou (Supervisor/Caixa); nomes ficam gravados mesmo se o cadastro for excluído depois.
 - **Aviso de renovação**: aba Renovações lista vencidos e vencendo em 15 dias, com WhatsApp e mensagem pronta. A planilha da aba traz os telefones para disparo em lote.
@@ -60,7 +71,7 @@ Arquivos compartilhados: `comum.js` / `comum.css` (API, PIN, máscaras, estilos)
 
 ## Onde fica cada coisa
 
-- **Supabase** (`wughmiprdbycsmkjsslj`): tabelas `vr_supervisores`, `vr_parceiros`, `vr_veiculos` (com `categoria`), `vr_adesivos` (histórico), `vr_almocos` (com `liberado_por`); bucket privado `vr-adesivos` (fotos, com link assinado só para o painel); PINs em `config`.
+- **Supabase** (`wughmiprdbycsmkjsslj`): tabelas `vr_supervisores`, `vr_parceiros`, `vr_veiculos` (com `categoria`), `vr_adesivos` (histórico), `vr_almocos` (com `liberado_por`, `desfeito_em`, `desfeito_por`), `vr_conferencias`; bucket privado `vr-adesivos` (fotos, com link assinado só para o painel); PINs em `config`.
 - **Função** `vale` (`supabase/functions/vale/index.ts`): toda a regra de negócio. As páginas só chamam a API.
-- **Migrações**: `supabase/migracao_vale_refeicao.sql` (criação) e `supabase/migracao_2_perfis.sql` (categoria do veículo e PIN administrativo).
+- **Migrações**: `supabase/migracao_vale_refeicao.sql` (criação), `supabase/migracao_2_perfis.sql` (categoria do veículo e PIN administrativo) e `supabase/migracao_3_conferencia.sql` (conferência e desfazer com rastro).
 - **Chave interna**: a categoria "Aplicativo" fica gravada como `uber` no banco (nome antigo); só o nome mostrado mudou.
