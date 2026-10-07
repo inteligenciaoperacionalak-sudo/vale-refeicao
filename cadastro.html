@@ -88,7 +88,7 @@ function resultado(r, dados){
       + '<p>É um prazer ter você com a gente.</p>'
       + '<p>Bom almoço e seja sempre bem-vindo! 💛</p>'
       + '<p class="dica" style="margin-top:14px">' + esc(r.nome) + ' · ' + esc(CATEGORIAS[r.categoria]) + (r.vencimento ? ' · adesivo válido até ' + dBr(r.vencimento) : '') + '<br>'
-      + (CATS_TELA.supervisor.indexOf(r.categoria) >= 0 ? 'Na hora do almoço, fale com o supervisor: ele libera e entrega o seu vale.' : 'Na hora do almoço, o caixa libera e entrega o seu vale.') + '</p></div>';
+      + (CATS_TELA.supervisor.indexOf(r.categoria) >= 0 ? 'Na hora do almoço, fale com o supervisor: ele libera e entrega o seu vale.' : 'Na hora do almoço, o caixa libera e entrega o seu vale.') + ' Você troca o vale pelo almoço.</p></div>';
   } else if (r.status === 'pendente') {
     var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(dados.nome) + '&tel=' + encodeURIComponent(dados.telefone) + '&placa=' + encodeURIComponent(dados.placa) + '&cat=' + encodeURIComponent(r.categoria);
     h = '<div class="resultado atencao"><div class="ic">📸</div><h2>Falta registrar o adesivo</h2>'

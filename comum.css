@@ -138,8 +138,7 @@ button.num.on::after{content:'filtrando';position:absolute;right:8px;top:8px;fon
 .res{background:var(--branco);border:1px solid var(--linha);border-radius:12px;padding:4px 14px;margin-top:12px}
 .res .linha{padding:12px 0}
 .res .linha.ja .tit{color:var(--cinza)}
-.fora{font-size:13px;color:var(--cinza);background:var(--papel);border-radius:8px;padding:10px 12px;margin:8px 0 10px}
-.fora b{color:var(--tinta)}
+.veredito .padrao{margin-top:14px;font-size:13px;font-weight:600;background:rgba(255,255,255,.18);border-radius:8px;padding:8px 10px}
 .hoje{margin-top:18px}
 .hoje summary{font-size:15px;font-weight:700;cursor:pointer;padding:6px 0}
 .hoje .linha{padding:8px 0}

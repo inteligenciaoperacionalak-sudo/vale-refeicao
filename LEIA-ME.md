@@ -6,23 +6,23 @@ Controle de quem tem direito ao almoço de parceiros (guias, motoristas, aplicat
 
 O parceiro se cadastra uma vez pelo QR do supervisor. Na hora do almoço, quem libera busca o nome, clica em **Liberar almoço de hoje** e entrega o **vale físico**; o parceiro troca o vale pelo almoço. O vale não é de ninguém: circula.
 
-| Quem libera | Categorias | Tela | PIN |
+| Quem libera | No dia a dia | Tela | PIN |
 |---|---|---|---|
 | **Supervisor** (confere o grupo do dia) | Guia, Motorista | `supervisor.html` | PIN único do supervisor |
 | **Caixa** | Prefeitura, Aplicativo, Taxista | `caixa.html` | PIN do caixa |
 | **Administrativo** | tudo (painel) | `painel.html` | PIN administrativo (também entra nas duas telas acima) |
 
-Cada tela só mostra as próprias categorias na busca. Se a busca encontra alguém da outra tela, avisa ("Na tela do Caixa: Fulano (Aplicativo)") sem deixar liberar.
+Desde 07/10/2026 **as duas telas podem liberar qualquer categoria** (em caso de necessidade o supervisor libera também prefeitura, aplicativo e taxista, e vice-versa). Fora do padrão da tela aparece só um aviso suave no cartão verde ("Aplicativo normalmente é liberado pelo Caixa"), sem bloquear. O relatório mostra quem liberou cada almoço.
 
 ## Conferência pós-almoço (auditoria dos vales)
 
 Os vales físicos são iguais para todas as categorias e voltam juntos ao fim do almoço, então a conferência é feita na **tela do Caixa**:
 
-- "Almoços de hoje" no caixa mostra o **total do dia** com a quebra (caixa · supervisores · desfeitos) e os nomes em dois blocos. O bloco dos supervisores é só leitura: liberar e desfazer continuam só nas categorias de cada tela.
+- "Almoços de hoje" mostra, nas duas telas, o **total do dia** com a quebra por quem liberou (caixa · supervisores · administrativo · desfeitos) e os nomes em blocos.
 - **Conferir vales recebidos**: o caixa digita a quantidade de vales que voltou; o sistema compara com os almoços ativos e grava data, hora, perfil, número do sistema, vales, diferença (bateu / falta / sobra) e observação. Uma conferência por dia; refazer substitui.
 - **Corte**: a conferência guarda o número do sistema naquele momento. Almoços liberados depois aparecem à parte ("2 liberados depois da conferência").
-- **Desfazer não apaga**: o almoço fica marcado com hora e perfil de quem desfez, sai do total e aparece riscado na lista e no relatório.
-- **Painel**: card "Conferência de hoje" (bateu / falta N / sobra N / não feita), e na aba Almoços cada dia mostra vales conferidos e diferença; o administrativo lança ou corrige a conferência de qualquer dia. A planilha exportada traz situação (ativo/desfeito), vales conferidos e diferença.
+- **Desfazer não apaga**: o almoço fica marcado com hora e perfil de quem desfez, sai do total e aparece riscado na lista e no relatório. Qualquer tela desfaz qualquer liberação do dia.
+- **Painel**: card "almoços hoje" com a quebra por quem liberou (ex.: "12 · 8 caixa · 4 sup."), card "Conferência de hoje" (bateu / falta N / sobra N / não feita), e na aba Almoços cada dia mostra vales conferidos e diferença; o administrativo lança ou corrige a conferência de qualquer dia. A planilha exportada traz situação (ativo/desfeito), vales conferidos e diferença.
 - Preparado para vales diferentes por tela: a tabela já tem `vales_caixa` e `vales_supervisor` (sem uso por enquanto).
 
 ## Páginas
@@ -32,8 +32,8 @@ Os vales físicos são iguais para todas as categorias e voltam juntos ao fim do
 | `index.html` | Equipe | Entrada com os três acessos (Supervisor, Caixa, Administrativo). Um link antigo `?s=CÓDIGO` segue para o cadastro |
 | `cadastro.html?s=CÓDIGO` | Parceiro (QR Vale refeição do supervisor) | Cadastro do vale: nome, telefone, empresa (opcional), categoria; prefeitura pede o setor, aplicativo/taxista pede a placa |
 | `veiculo.html?s=CÓDIGO` | Taxista/aplicativo, com o supervisor conferindo (QR Marketing de Veículo) | Marketing de Veículo: nome, telefone, **taxista ou motorista de aplicativo**, modelo, placa e foto do carro com o adesivo. Registra aplicação ou renovação |
-| `supervisor.html` | Supervisores (PIN único) | Busca guias e motoristas, libera o almoço do dia e entrega o vale |
-| `caixa.html` | Caixa (PIN do caixa) | Busca prefeitura, aplicativo e taxista, libera o almoço do dia e entrega o vale. Vê o total do dia e faz a conferência dos vales |
+| `supervisor.html` | Supervisores (PIN único) | Busca o parceiro (no dia a dia guias e motoristas), libera o almoço do dia e entrega o vale |
+| `caixa.html` | Caixa (PIN do caixa) | Busca o parceiro (no dia a dia prefeitura, aplicativo e taxista), libera o almoço do dia e entrega o vale. Faz a conferência dos vales |
 | `painel.html` | Administrativo (PIN administrativo) | Abas Aplicativo e Taxistas / Guias e Motoristas / Prefeitura / Marketing de Veículo / Renovações e, destacadas, Almoços / Supervisores. Cards de resumo filtram as listas; cada aba exporta planilha Excel |
 
 Arquivos compartilhados: `comum.js` / `comum.css` (API, PIN, máscaras, estilos), `liberar.js` (lógica das telas do supervisor e do caixa), `xlsx.js` (gera o Excel no navegador, sem biblioteca externa), `qrcode.min.js`.
@@ -68,6 +68,14 @@ Arquivos compartilhados: `comum.js` / `comum.css` (API, PIN, máscaras, estilos)
 3. Abrir `supervisor.html` no celular dos supervisores → "Primeiro acesso do Supervisor": informar o PIN do setor de compras e criar o PIN único. Depois, cada aparelho novo só pede esse PIN.
 4. Abrir `caixa.html` no aparelho do caixa → PIN do caixa.
 5. Parceiro lê o QR do supervisor → cadastro. Taxista/aplicativo: primeiro o QR Marketing de Veículo (com foto, supervisor conferindo), depois o QR Vale refeição.
+
+## Melhorias futuras (banco de ideias)
+
+Decididas como "depois que a operação rodar na prática":
+
+1. **Diferenciar os dois vales físicos** (supervisor × caixa). Hoje os vales são iguais e a conferência tem um número só. Ideia: fazer 2 furos nos vales que vão para os supervisores (ou nova produção). A tabela `vr_conferencias` já tem `vales_caixa` e `vales_supervisor`; muda só a tela da conferência (dois campos, cada um comparado com o próprio total).
+2. **Checar a foto do Marketing de Veículo com IA.** A função chamaria um modelo de visão para confirmar que a foto é um carro com o adesivo e a placa visível, ler a placa e comparar com a digitada. Começar como selo no painel ("foto confere" / "placa não bate: foto X, cadastro Y" / "não deu para ler"), sem bloquear o cadastro (o supervisor está ao lado do carro). Se a leitura se mostrar confiável, ligar um aviso suave no formulário. Para celular com câmera ruim, pedir uma segunda foto só da placa, de perto. Precisa de uma chave de API guardada como segredo no Supabase; custo de centavos por foto.
+3. Pendentes da rodada 1 (aguardando o sócio): placa opcional no cadastro do vale / cruzamento por telefone OU placa; importação da planilha de contatos para pré-preencher o cadastro.
 
 ## Onde fica cada coisa
 

@@ -1,18 +1,16 @@
 // Vale Refeição — tela de liberação do almoço. O mesmo código serve caixa.html e supervisor.html:
 // a página define window.TELA = { perfil: 'caixa' | 'supervisor', intro: '...' } antes de carregar este arquivo.
-//   supervisor → só guias e motoristas (confere o grupo, libera e entrega o vale)
-//   caixa      → só prefeitura, aplicativo e taxista
-// O PIN administrativo também entra nas duas telas.
+// As duas telas liberam qualquer categoria (desde 07/10/2026). No dia a dia o supervisor cuida de guias e motoristas
+// e o caixa de prefeitura, aplicativo e taxista; fora disso a tela só mostra um aviso suave, sem bloquear.
+// A conferência dos vales fica na tela do caixa. O PIN administrativo também entra nas duas telas.
 var app = document.getElementById('app');
 var TELA = window.TELA;
 var PERFIS_TELA = [TELA.perfil, 'admin'];
 var Q_TELA = 'tela=' + TELA.perfil;
 var OUTRA = TELA.perfil === 'caixa' ? 'Supervisor' : 'Caixa';
-var EST = null, HOJE = null, RES = [], FORA = [], SEL = null, TERMO = '', timer = null, ULT_BUSCA = 0;
-var DIA = null;            // resposta de /caixa/hoje (na tela do caixa traz o dia inteiro e a conferência)
+var EST = null, HOJE = null, RES = [], SEL = null, TERMO = '', timer = null, ULT_BUSCA = 0;
+var DIA = null;            // resposta de /caixa/hoje (o dia inteiro; na tela do caixa traz também a conferência)
 var CONF_ABERTA = false;   // formulário da conferência aberto
-
-function nomeCats(){ return CATS_TELA[TELA.perfil].map(function(c){ return CATEGORIAS[c]; }).join(', ').replace(/, ([^,]*)$/, ' e $1'); }
 
 function topo(){
   var h = '<h1>Vale refeição</h1>';
@@ -46,7 +44,7 @@ function entrar(){
     document.getElementById('q-limpar').hidden = !TERMO;
     document.getElementById('veredito').innerHTML = '';   // some o veredito da busca anterior na hora
     clearTimeout(timer);
-    if (TERMO.trim().length < 2) { RES = []; FORA = []; render(); return; }
+    if (TERMO.trim().length < 2) { RES = []; render(); return; }
     timer = setTimeout(buscar, 250);
   };
   q.onkeydown = function(ev){ if (ev.key === 'Enter') { clearTimeout(timer); buscar(); } };
@@ -56,14 +54,14 @@ function entrar(){
   if (TERMO.trim().length >= 2) buscar();
 }
 
-function limpar(){ TERMO = ''; RES = []; FORA = []; SEL = null; var q = document.getElementById('q'); q.value = ''; document.getElementById('q-limpar').hidden = true; render(); q.focus(); }
+function limpar(){ TERMO = ''; RES = []; SEL = null; var q = document.getElementById('q'); q.value = ''; document.getElementById('q-limpar').hidden = true; render(); q.focus(); }
 
 function buscar(){
   var t = TERMO.trim(); if (t.length < 2) return;
   var n = ++ULT_BUSCA;
   apiAuth('/caixa/buscar?' + Q_TELA + '&q=' + encodeURIComponent(t)).then(function(d){
     if (n !== ULT_BUSCA) return;          // chegou resposta de uma busca antiga
-    HOJE = d.hoje; RES = d.parceiros; FORA = d.fora || [];
+    HOJE = d.hoje; RES = d.parceiros;
     if (RES.length === 1) SEL = RES[0].id;
     render();
   }).catch(function(e){ if (e.message !== '401') toast(e.message); });
@@ -74,38 +72,36 @@ function carregarHoje(){
     HOJE = d.hoje; DIA = d;
     var box = document.getElementById('hoje-lista'), det = document.getElementById('hoje');
     if (!box) return;
-    if (d.resumo) renderDiaCaixa(d, box, det);
-    else {
-      det.querySelector('summary').textContent = 'Almoços de hoje · ' + d.almocos.length;
-      box.innerHTML = d.almocos.length ? linhasAlmoco(d.almocos) : '<p class="msg">Nenhum almoço liberado hoje ainda.</p>';
-    }
+    renderDia(d, box, det);
     renderConf();
   }).catch(function(){});
 }
 
-function linhasAlmoco(lista, soLeitura){
+function linhasAlmoco(lista){
   var h = '';
   for (var i = 0; i < lista.length; i++) {
     var a = lista[i];
-    h += '<div class="linha"><div class="txt"><div class="tit">' + esc(a.nome) + '</div><div class="sub">' + esc(CATEGORIAS[a.categoria] || a.categoria) + ' · ' + horaBR(a.hora) + (soLeitura ? ' · liberado pelo ' + esc(PERFIL_NOME[a.liberado_por] || a.liberado_por) : '') + '</div></div></div>';
+    h += '<div class="linha"><div class="txt"><div class="tit">' + esc(a.nome) + '</div><div class="sub">' + esc(CATEGORIAS[a.categoria] || a.categoria) + ' · ' + horaBR(a.hora) + '</div></div></div>';
   }
   return h;
 }
 
-// Tela do caixa: o dia inteiro, em dois blocos. O bloco dos supervisores é só leitura (liberar e desfazer continuam por categoria).
-function renderDiaCaixa(d, box, det){
-  var r = d.resumo;
+// O dia inteiro nas duas telas, em blocos por quem liberou (é o que o relatório também mostra)
+function renderDia(d, box, det){
+  var r = d.resumo || { total: d.almocos.length, caixa: 0, supervisor: 0, admin: 0 };
+  var todos = d.todos || d.almocos, desfeitos = d.desfeitos || [];
   det.querySelector('summary').textContent = 'Almoços de hoje · ' + r.total;
-  var meus = d.todos.filter(function(a){ return CATS_TELA.caixa.indexOf(a.categoria) >= 0; });
-  var deles = d.todos.filter(function(a){ return CATS_TELA.supervisor.indexOf(a.categoria) >= 0; });
-  var h = '<p class="msg" style="margin-top:4px">' + r.total + ' no total · ' + r.caixa + ' caixa · ' + r.supervisor + ' supervisores' + (d.desfeitos.length ? ' · ' + d.desfeitos.length + ' desfeito' + (d.desfeitos.length > 1 ? 's' : '') : '') + '</p>';
-  if (!r.total && !d.desfeitos.length) h += '<p class="msg">Nenhum almoço liberado hoje ainda.</p>';
-  h += '<div class="bloco-tit">Caixa · prefeitura, aplicativo e taxista (' + meus.length + ')</div>' + (meus.length ? linhasAlmoco(meus) : '<p class="msg">Nenhum.</p>');
-  h += '<div class="bloco-tit">Supervisores · guias e motoristas (' + deles.length + ') <span class="so-leitura">só leitura</span></div>' + (deles.length ? linhasAlmoco(deles, true) : '<p class="msg">Nenhum.</p>');
-  if (d.desfeitos.length) {
-    h += '<div class="bloco-tit">Desfeitos (' + d.desfeitos.length + ')</div>';
-    for (var i = 0; i < d.desfeitos.length; i++) {
-      var a = d.desfeitos[i];
+  var porPerfil = function(pf){ return todos.filter(function(a){ return a.liberado_por === pf; }); };
+  var cx = porPerfil('caixa'), sp = porPerfil('supervisor'), ad = porPerfil('admin');
+  var h = '<p class="msg" style="margin-top:4px">' + r.total + ' no total · ' + r.caixa + ' pelo caixa · ' + r.supervisor + ' pelos supervisores' + (r.admin ? ' · ' + r.admin + ' pelo administrativo' : '') + (desfeitos.length ? ' · ' + desfeitos.length + ' desfeito' + (desfeitos.length > 1 ? 's' : '') : '') + '</p>';
+  if (!r.total && !desfeitos.length) h += '<p class="msg">Nenhum almoço liberado hoje ainda.</p>';
+  h += '<div class="bloco-tit">Liberados pelo Caixa (' + cx.length + ')</div>' + (cx.length ? linhasAlmoco(cx) : '<p class="msg">Nenhum.</p>');
+  h += '<div class="bloco-tit">Liberados pelos Supervisores (' + sp.length + ')</div>' + (sp.length ? linhasAlmoco(sp) : '<p class="msg">Nenhum.</p>');
+  if (ad.length) h += '<div class="bloco-tit">Liberados pelo Administrativo (' + ad.length + ')</div>' + linhasAlmoco(ad);
+  if (desfeitos.length) {
+    h += '<div class="bloco-tit">Desfeitos (' + desfeitos.length + ')</div>';
+    for (var i = 0; i < desfeitos.length; i++) {
+      var a = desfeitos[i];
       h += '<div class="linha desfeito"><div class="txt"><div class="tit">' + esc(a.nome) + '</div><div class="sub">' + esc(CATEGORIAS[a.categoria] || a.categoria) + ' · liberado ' + horaBR(a.hora) + ' · desfeito ' + horaBR(a.desfeito_em) + ' pelo ' + esc(PERFIL_NOME[a.desfeito_por] || a.desfeito_por) + '</div></div></div>';
     }
   }
@@ -119,7 +115,7 @@ function classeDif(dif){ return dif === 0 ? 'ok' : dif < 0 ? 'falta' : 'sobra'; 
 function renderConf(){
   var box = document.getElementById('conf');
   if (!box) return;
-  if (!DIA || !DIA.resumo) { box.innerHTML = ''; return; }
+  if (!DIA || !DIA.resumo || !('conferencia' in DIA)) { box.innerHTML = ''; return; }   // conferência só na tela do caixa
   var c = DIA.conferencia, total = DIA.resumo.total, h;
   if (CONF_ABERTA) {
     h = '<div class="conf form"><div class="conf-tit">Conferir vales recebidos</div>'
@@ -169,13 +165,8 @@ function gravarConf(){
   }).catch(function(e){ bt.disabled = false; if (e.message !== '401') toast(e.message); });
 }
 
-// Quem bateu com a busca mas é liberado na outra tela
-function htmlFora(){
-  if (!FORA.length) return '';
-  var nomes = FORA.map(function(f){ return esc(f.nome) + ' (' + esc(CATEGORIAS[f.categoria] || f.categoria) + ')'; }).join(', ');
-  return '<div class="fora"><b>Na tela do ' + OUTRA + ':</b> ' + nomes + '. '
-    + (TELA.perfil === 'caixa' ? 'Guias e motoristas são liberados pelo supervisor.' : 'Prefeitura, aplicativo e taxista são liberados pelo caixa.') + '</div>';
-}
+// Categoria fora do padrão desta tela? (não bloqueia; só avisa)
+function foraDoPadrao(cat){ return CATS_TELA[TELA.perfil].indexOf(cat) < 0; }
 
 function render(){
   var vb = document.getElementById('veredito'), rb = document.getElementById('res');
@@ -185,8 +176,8 @@ function render(){
   vb.innerHTML = sel ? htmlVeredito(sel) : '';
   var h = '';
   if (TERMO.trim().length >= 2 && !RES.length) {
-    h = '<div class="res"><div class="vazio"><b>Ninguém com “' + esc(TERMO.trim()) + '”' + (FORA.length ? ' nesta tela' : '') + '</b>'
-      + '<span class="msg">' + (FORA.length ? '' : 'Confira o nome, a placa ou o telefone. ') + 'Sem cadastro, não libere o almoço.</span></div>' + htmlFora() + '</div>';
+    h = '<div class="res"><div class="vazio"><b>Ninguém com “' + esc(TERMO.trim()) + '”</b>'
+      + '<span class="msg">Confira o nome, a placa ou o telefone. Sem cadastro, não libere o almoço.</span></div></div>';
   } else if (RES.length) {
     h = '<div class="res">';
     for (var j = 0; j < RES.length; j++) {
@@ -195,7 +186,7 @@ function render(){
         + '<div class="txt"><div class="tit">' + esc(p.nome) + '</div><div class="sub">' + esc(CATEGORIAS[p.categoria] || p.categoria) + (p.placa ? ' · ' + esc(fmtPlaca(p.placa)) : '') + ' · ' + esc(fmtTel(p.telefone)) + (p.setor ? ' · ' + esc(p.setor) : '') + '</div></div>'
         + (p.almocou_em ? '<span class="pill neutro">já almoçou</span>' : pillStatus(p.status)) + '<span class="chev">›</span></div>';
     }
-    h += htmlFora() + '</div>';
+    h += '</div>';
   }
   rb.innerHTML = h;
   var ls = rb.querySelectorAll('[data-sel]');
@@ -214,7 +205,8 @@ function htmlVeredito(p){
   } else if (p.status === 'ativo') {
     cls = 'ativo'; frase = 'Pode almoçar';
     expl = (p.vencimento ? 'Adesivo válido até ' + dBr(p.vencimento) + (p.dias <= 15 ? ' · ' + textoVenc(p.dias) : '') + '. ' : 'Cadastro ativo. ') + 'Libere e entregue o vale.';
-    acao = '<button class="bt-grande" data-liberar="' + p.id + '">Liberar almoço de hoje</button>';
+    if (foraDoPadrao(p.categoria)) acao += '<div class="padrao">' + esc(CATEGORIAS[p.categoria] || p.categoria) + ' normalmente é liberado pelo ' + OUTRA + '. Libere só se for o caso.</div>';
+    acao += '<button class="bt-grande" data-liberar="' + p.id + '">Liberar almoço de hoje</button>';
   } else if (p.status === 'renovacao') {
     cls = 'renovacao'; frase = 'Adesivo vencido em ' + dBr(p.vencimento);
     expl = 'Não libere. Precisa renovar o adesivo e registrar de novo pelo QR do supervisor.';

@@ -117,6 +117,13 @@ function card(k, n, rotulo, cls){
   var on = FILTRO === k && filtroAtivoAqui();
   return '<button type="button" class="num' + (cls ? ' ' + cls : '') + (on ? ' on' : '') + '" data-card="' + k + '" aria-pressed="' + on + '"><b>' + n + '</b><span>' + rotulo + '</span></button>';
 }
+// quebra do card "almoços hoje": quem liberou (as duas telas podem liberar qualquer categoria)
+function quebraHoje(){
+  var q = D.almocos_hoje_por || {}, partes = [];
+  if (D.almocos_hoje) { partes.push((q.caixa || 0) + ' caixa'); partes.push((q.supervisor || 0) + ' sup.'); if (q.admin) partes.push(q.admin + ' adm'); }
+  if (D.desfeitos_hoje) partes.push(D.desfeitos_hoje + ' desfeito' + (D.desfeitos_hoje > 1 ? 's' : ''));
+  return partes.length ? ' · ' + partes.join(' · ') : '';
+}
 function cardConferencia(){
   var c = D.conferencia_hoje;
   if (!c) return card('conferencia', '—', 'conferência de hoje · não feita', D.almocos_hoje ? 'aviso' : '');
@@ -132,7 +139,7 @@ function render(){
     + card('vencendo', c.vencendo, 'vencendo em ' + D.aviso_dias + ' dias', c.vencendo ? 'aviso' : '')
     + card('renovacao', c.renovacao, 'precisam renovar', c.renovacao ? 'alerta' : '')
     + card('pendente', c.pendentes, 'pendentes', c.pendentes ? 'aviso' : '')
-    + card('almocos_hoje', D.almocos_hoje, 'almoços hoje' + (D.desfeitos_hoje ? ' · ' + D.desfeitos_hoje + ' desfeito' + (D.desfeitos_hoje > 1 ? 's' : '') : ''), '')
+    + card('almocos_hoje', D.almocos_hoje, 'almoços hoje' + quebraHoje(), '')
     + cardConferencia()
     + '</div>';
   h += '<div class="abas"><div class="grupo">';
@@ -240,14 +247,14 @@ function htmlParceiros(){
   EXP = { arquivo: { uber: 'aplicativo-taxistas', guia: 'guias-motoristas', prefeitura: 'prefeitura' }[VIEW], aba: nomeAba, colunas: colsParceiros(VIEW), linhas: [] };
   var h = '<div class="caixa"><div class="filtro"><input type="search" id="p-busca" placeholder="Buscar por nome, telefone, placa ou empresa" value="' + esc(BUSCA) + '" aria-label="Buscar">' + btExportar() + '</div>';
   if (VIEW === 'uber') {
-    h += '<p class="msg" style="margin-top:0">Aplicativo e taxista só ficam ativos com o adesivo registrado no Marketing de Veículo para o mesmo telefone e placa. O status aqui é calculado, não digitado. O almoço deles é liberado na tela do Caixa.</p>';
+    h += '<p class="msg" style="margin-top:0">Aplicativo e taxista só ficam ativos com o adesivo registrado no Marketing de Veículo para o mesmo telefone e placa. O status aqui é calculado, não digitado. No dia a dia o almoço deles é liberado na tela do Caixa (o Supervisor também pode).</p>';
     h += blocoParceiros(['uber', 'taxista'], null);
   } else if (VIEW === 'guia') {
-    h += '<p class="msg" style="margin-top:0">O almoço de guias e motoristas é liberado na tela do Supervisor, que confere o grupo do dia e entrega o vale.</p>';
+    h += '<p class="msg" style="margin-top:0">No dia a dia o almoço de guias e motoristas é liberado na tela do Supervisor, que confere o grupo e entrega o vale (o Caixa também pode).</p>';
     h += blocoParceiros(['guia'], 'Guias');
     h += blocoParceiros(['motorista'], 'Motoristas');
   } else {
-    h += '<p class="msg" style="margin-top:0">O almoço da prefeitura é liberado na tela do Caixa.</p>';
+    h += '<p class="msg" style="margin-top:0">No dia a dia o almoço da prefeitura é liberado na tela do Caixa (o Supervisor também pode).</p>';
     h += blocoParceiros(['prefeitura'], null);
   }
   return h + '</div>';
@@ -401,7 +408,7 @@ function htmlAlmocos(){
     + '<div><label for="r-ate">Até</label><input type="date" id="r-ate" value="' + esc(REL.ate) + '"></div>'
     + '<button class="bt-mar" id="r-ok">Ver almoços</button>'
     + (REL.dados && REL.dados.almocos.length ? btExportar() : '') + '</div>'
-    + '<p class="msg">Conta o que foi liberado nas telas do Supervisor (guias e motoristas) e do Caixa (prefeitura, aplicativo e taxista); os desfeitos ficam marcados e fora do total. A conferência compara os vales físicos recebidos com o sistema.</p>';
+    + '<p class="msg">Conta o que foi liberado nas telas do Supervisor e do Caixa, com quem liberou; os desfeitos ficam marcados e fora do total. A conferência compara os vales físicos recebidos com o sistema.</p>';
   if (REL.dados) {
     var todos = REL.dados.almocos, a = todos.filter(function(x){ return !x.desfeito_em; });
     var confs = {}; (REL.dados.conferencias || []).forEach(function(c){ confs[c.data] = c; });
@@ -490,7 +497,7 @@ var QRS = [
 function htmlSupervisores(){
   EXP = { arquivo: 'supervisores', aba: 'Supervisores', colunas: [['Nome', 28], ['Código', 10], ['Situação', 12], ['Link QR Vale refeição', 60], ['Link QR Marketing de Veículo', 60]],
     linhas: D.supervisores.map(function(s){ return [s.nome, s.codigo, s.ativo ? 'ativo' : 'desativado', QRS[0].link(s.codigo), QRS[1].link(s.codigo)]; }) };
-  var h = '<div class="caixa"><p class="msg" style="margin-top:0">Cada supervisor tem dois QRs: um para o cadastro do vale refeição e outro para o Marketing de Veículo. Quem entra por eles fica registrado como autorizado por esse supervisor. Imprima os QRs ou mande os links para o celular de cada um. Para liberar o almoço de guias e motoristas, os supervisores usam a <a href="supervisor.html">tela do Supervisor</a>, com o PIN único do supervisor.</p>'
+  var h = '<div class="caixa"><p class="msg" style="margin-top:0">Cada supervisor tem dois QRs: um para o cadastro do vale refeição e outro para o Marketing de Veículo. Quem entra por eles fica registrado como autorizado por esse supervisor. Imprima os QRs ou mande os links para o celular de cada um. Para liberar o almoço (no dia a dia guias e motoristas), os supervisores usam a <a href="supervisor.html">tela do Supervisor</a>, com o PIN único do supervisor.</p>'
     + '<div class="filtro"><input type="text" id="s-nome" placeholder="Nome do supervisor" aria-label="Nome do novo supervisor"><button class="bt-mar" id="s-add">Adicionar supervisor</button>' + btExportar() + '</div>';
   if (!D.supervisores.length) h += '<div class="vazio"><b>Nenhum supervisor ainda</b><span class="msg">Adicione o primeiro para gerar os QRs de cadastro.</span></div>';
   for (var i = 0; i < D.supervisores.length; i++) {
