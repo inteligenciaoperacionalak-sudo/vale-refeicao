@@ -108,6 +108,10 @@ function resultado(r){
     var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(r.nome) + '&tel=' + encodeURIComponent(r.telefone) + '&placa=' + encodeURIComponent(r.placa) + '&cat=' + encodeURIComponent(r.categoria || CAT);
     h += '<p style="margin-top:14px">Falta só o cadastro do vale refeição, com este mesmo telefone e placa.</p>'
       + '<a class="bt-mar bt-grande" style="display:block;text-decoration:none;text-align:center" href="cadastro.html?' + q + '">Fazer o cadastro do vale</a>';
+  } else if (r.vale.criado) {
+    h += '<div class="veredito ativo" style="margin-top:14px"><b>Pronto, você já pode almoçar!</b><br>Seu cadastro do vale refeição foi feito junto com o adesivo. Na hora do almoço, é só dizer seu nome: o caixa libera e entrega o seu vale.</div>';
+  } else if (r.vale.telefone_diferente) {
+    h += '<p class="dica">Seu cadastro do vale está com outro telefone. Peça ao supervisor para corrigir para ' + esc(fmtTel(r.telefone)) + '.</p>';
   } else if (r.vale.placa_diferente) {
     h += '<p class="dica">Seu cadastro do vale está com outra placa. Peça ao supervisor para corrigir para ' + esc(fmtPlaca(r.placa)) + '.</p>';
   } else if (r.vale.status === 'ativo') {

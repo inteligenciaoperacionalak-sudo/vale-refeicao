@@ -231,14 +231,14 @@ function colsParceiros(view){
   var c = [['Nome', 30], ['Categoria', 13], ['Telefone', 16], ['Telefone para disparo', 20], ['Empresa', 22]];
   if (view === 'prefeitura') c.push(['Setor', 24]);
   if (view === 'uber') c.push(['Placa', 10], ['Adesivo vence em', 16]);
-  c.push(['Situação', 12], ['Cadastrado em', 14], ['Supervisor', 20]);
+  c.push(['Situação', 12], ['Cadastrado em', 14], ['Supervisor', 20], ['Origem', 22]);
   return c;
 }
 function linhaExpParceiro(p, view){
   var l = [p.nome, CATEGORIAS[p.categoria] || p.categoria, fmtTel(p.telefone), telDisparo(p.telefone), p.empresa || ''];
   if (view === 'prefeitura') l.push(p.setor || '');
   if (view === 'uber') l.push(fmtPlaca(p.placa || ''), p.vencimento ? dBr(p.vencimento) : '');
-  l.push(STATUS_NOME[p.status] || p.status, dataBRdeTs(p.criado_em), supNome(p.supervisor_id));
+  l.push(STATUS_NOME[p.status] || p.status, dataBRdeTs(p.criado_em), supNome(p.supervisor_id), p.origem === 'marketing' ? 'Marketing de Veículo' : 'Formulário do vale');
   return l;
 }
 
@@ -273,7 +273,7 @@ function blocoParceiros(cats, titulo){
       + (p.vencimento ? ' · adesivo até ' + dBr(p.vencimento) : '');
     h += '<div class="linha clic" data-abrir="' + p.id + '" role="button" tabindex="0" aria-expanded="' + (ABERTO === p.id) + '">'
       + '<div class="txt"><div class="tit">' + esc(p.nome) + '</div><div class="sub">' + sub + '</div></div>'
-      + (cats.length > 1 ? pillCat(p.categoria) : '') + pillStatus(p.status) + '<span class="chev">' + (ABERTO === p.id ? '▴' : '▾') + '</span></div>';
+      + (cats.length > 1 ? pillCat(p.categoria) : '') + (p.origem === 'marketing' ? '<span class="pill neutro" title="Cadastro criado automaticamente pelo Marketing de Veículo">Marketing</span>' : '') + pillStatus(p.status) + '<span class="chev">' + (ABERTO === p.id ? '▴' : '▾') + '</span></div>';
     if (ABERTO === p.id) h += detalheParceiro(p);
   }
   return h;
@@ -281,7 +281,7 @@ function blocoParceiros(cats, titulo){
 
 function detalheParceiro(p){
   var h = '<div class="detalhe">';
-  h += '<p class="msg">Cadastrado em ' + dataBRdeTs(p.criado_em) + (supNome(p.supervisor_id) ? ' pelo QR do supervisor ' + esc(supNome(p.supervisor_id)) : '') + (p.atualizado_em !== p.criado_em ? ' · alterado em ' + dataBRdeTs(p.atualizado_em) : '') + '</p>';
+  h += '<p class="msg">Cadastrado em ' + dataBRdeTs(p.criado_em) + (supNome(p.supervisor_id) ? ' pelo QR do supervisor ' + esc(supNome(p.supervisor_id)) : '') + (p.origem === 'marketing' ? ' · <b>veio pelo Marketing de Veículo</b> (cadastro do vale criado automaticamente)' : '') + (p.atualizado_em !== p.criado_em ? ' · alterado em ' + dataBRdeTs(p.atualizado_em) : '') + '</p>';
   if (COM_ADESIVO[p.categoria]) {
     if (p.status === 'pendente') {
       h += '<p class="erro">Sem adesivo registrado para este telefone + placa.' + (p.outra_placa ? ' Há um veículo com este telefone e placa <b>' + esc(fmtPlaca(p.outra_placa)) + '</b> — se for o mesmo carro, corrija a placa abaixo.' : ' Peça para registrar o adesivo pelo QR do supervisor.') + '</p>';

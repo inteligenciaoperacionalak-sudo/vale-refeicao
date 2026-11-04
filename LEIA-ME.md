@@ -46,6 +46,8 @@ Arquivos compartilhados: `comum.js` / `comum.css` (API, PIN, máscaras, estilos)
 - **Vencimento bloqueia sozinho**: no dia seguinte ao vencimento ninguém consegue liberar.
 - **1 almoço ativo por dia** é garantido no banco (índice único parceiro + data, ignorando os desfeitos).
 - **Telefone único**: um segundo cadastro com o mesmo número recebe "Já tem cadastro nesse número" (sem mostrar o nome de quem já está cadastrado).
+- **Telefone completo** (03/11/2026): só entra DDD + número de celular com 11 dígitos (o terceiro é 9) ou fixo com 10; número com o 55 na frente e dígito faltando é recusado com a mensagem "Digite DDD + número completo… (sem o 55)". Vale para os dois formulários e para as edições no painel.
+- **Marketing de Veículo cria o vale sozinho** (03/11/2026): quem conclui o adesivo e não tem cadastro do vale (nem pelo telefone, nem pela placa) ganha o cadastro automaticamente, com os dados do Marketing, já vinculado ao adesivo e ativo. A tela final diz "Pronto, você já pode almoçar". No painel o cadastro aparece com a etiqueta **Marketing** e a coluna "Origem" na planilha. Os formulários e links continuam os mesmos — o vale e o controle do Marketing são duas listas, não é duplicação. Os 11 veículos cadastrados antes dessa regra receberam o cadastro do vale no mesmo dia.
 - **Relatório de almoços** por dia e por categoria, com quem liberou (Supervisor/Caixa); nomes ficam gravados mesmo se o cadastro for excluído depois.
 - **Aviso de renovação**: aba Renovações lista vencidos e vencendo em 15 dias, com WhatsApp e mensagem pronta. A planilha da aba traz os telefones para disparo em lote.
 
