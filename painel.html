@@ -288,6 +288,7 @@ function detalheParceiro(p){
     } else if (p.vencimento) {
       h += '<p class="msg">Adesivo aplicado/renovado em ' + dBr(p.adesivo_em) + ' · vence em ' + dBr(p.vencimento) + ' (' + textoVenc(p.dias) + ').' + (p.status === 'renovacao' ? ' <b style="color:var(--verm)">Precisa renovar.</b>' : '') + '</p>';
     }
+    if (p.colegas && p.colegas.length) h += '<p class="msg">Divide o carro ' + esc(fmtPlaca(p.placa)) + ' com <b>' + esc(p.colegas.join(', ')) + '</b> · 1 almoço por dia por carro.</p>';
   }
   if (EDIT === p.id) {
     h += '<div class="grade">'
@@ -323,7 +324,7 @@ function htmlVeiculos(){
     colunas: [['Nome', 30], ['Categoria', 22], ['Telefone', 16], ['Telefone para disparo', 20], ['Placa', 10], ['Modelo', 22], ['Adesivo em', 12], ['Vence em', 12], ['Situação', 11], ['Cadastro do vale', 26], ['Supervisor', 20]],
     linhas: vis.map(function(v){
       return [v.nome, v.categoria ? CAT_VEICULO[v.categoria] : '', fmtTel(v.telefone), telDisparo(v.telefone), fmtPlaca(v.placa), v.modelo, dBr(v.adesivo_em), dBr(v.vencimento), STATUS_NOME[v.situacao] || v.situacao,
-        v.parceiro ? v.parceiro.nome + ' (' + (CATEGORIAS[v.parceiro.categoria] || v.parceiro.categoria) + ')' : (v.parceiro_outra_placa ? 'outra placa no vale: ' + fmtPlaca(v.parceiro_outra_placa.placa) : 'sem cadastro do vale'), supNome(v.supervisor_id)];
+        v.motoristas && v.motoristas.length ? v.motoristas.map(function(m){ return m.nome; }).join(', ') : 'sem cadastro do vale', supNome(v.supervisor_id)];
     }) };
   var h = '<div class="caixa"><div class="filtro"><input type="search" id="p-busca" placeholder="Buscar por nome, placa, telefone ou modelo" value="' + esc(BUSCA) + '" aria-label="Buscar">' + btExportar() + '</div>'
     + '<p class="msg" style="margin-top:0">Cada veículo vale por ' + D.meses + ' meses a partir da data do adesivo. Para registrar ou renovar, o motorista usa o QR Marketing de Veículo do supervisor (aba Supervisores) e envia a foto; a data do adesivo só muda por aí.</p>';
@@ -333,7 +334,7 @@ function htmlVeiculos(){
     var v = vis[i];
     h += '<div class="linha clic" data-abrirv="' + v.id + '" role="button" tabindex="0" aria-expanded="' + (ABERTO === v.id) + '">'
       + (v.foto_url ? '<img class="foto-mini" src="' + esc(v.foto_url) + '" alt="" loading="lazy">' : '<div class="foto-mini"></div>')
-      + '<div class="txt"><div class="tit">' + esc(v.nome) + ' · ' + esc(fmtPlaca(v.placa)) + '</div>'
+      + '<div class="txt"><div class="tit">' + esc(nomesCarro(v)) + ' · ' + esc(fmtPlaca(v.placa)) + '</div>'
       + '<div class="sub">' + esc(v.modelo) + ' · ' + esc(fmtTel(v.telefone)) + ' · adesivo ' + dBr(v.adesivo_em) + ' → vence ' + dBr(v.vencimento) + '</div></div>'
       + (v.categoria ? pillCat(v.categoria) : '<span class="pill neutro">sem categoria</span>') + pillStatus(v.situacao) + '<span class="chev">' + (ABERTO === v.id ? '▴' : '▾') + '</span></div>';
     if (ABERTO === v.id) h += detalheVeiculo(v);
@@ -347,14 +348,20 @@ function detalheVeiculo(v){
   h += '<p class="msg">' + esc(textoVenc(v.dias).replace(/^./, function(c){ return c.toUpperCase(); })) + ' (' + dBr(v.vencimento) + ').'
     + (v.categoria ? ' ' + esc(CAT_VEICULO[v.categoria]) + '.' : ' <b style="color:var(--verm)">Sem categoria (taxista ou aplicativo): informe em "Corrigir dados".</b>')
     + (supNome(v.supervisor_id) ? ' Último registro pelo QR do supervisor ' + esc(supNome(v.supervisor_id)) + '.' : '') + '</p>';
-  if (v.parceiro) h += '<p class="msg">Vale: <b>' + esc(v.parceiro.nome) + '</b> (' + esc(CATEGORIAS[v.parceiro.categoria] || v.parceiro.categoria) + ')' + (v.parceiro.status_manual === 'inativo' ? ' · <span style="color:var(--verm)">inativado pelo administrativo</span>' : '') + '</p>';
-  else if (v.parceiro_outra_placa) h += '<p class="erro">Existe cadastro do vale com este telefone, mas com a placa ' + esc(fmtPlaca(v.parceiro_outra_placa.placa)) + ' (' + esc(v.parceiro_outra_placa.nome) + '). Corrija a placa em um dos dois para o vale ficar ativo.</p>';
+  if (v.motoristas && v.motoristas.length) {
+    h += '<div class="hist"><b>Motorista' + (v.motoristas.length > 1 ? 's' : '') + ' do carro</b>' + (v.motoristas.length > 1 ? ' <span class="dica">· 1 almoço por dia por carro</span>' : '');
+    for (var mi = 0; mi < v.motoristas.length; mi++) {
+      var mo = v.motoristas[mi];
+      h += '<div>' + esc(mo.nome) + ' · ' + esc(fmtTel(mo.telefone)) + (mo.status_manual === 'inativo' ? ' · <span style="color:var(--verm)">inativado</span>' : '') + ' <button class="bt-link bt-mini" data-removercarro="' + mo.id + '" data-nome="' + esc(mo.nome) + '">Remover do carro</button></div>';
+    }
+    h += '</div>';
+  }
   else h += '<p class="erro">Ainda sem cadastro do vale com este telefone e placa. O motorista precisa fazer o cadastro pelo QR Vale refeição do supervisor.</p>';
   if (v.historico && v.historico.length) {
     h += '<div class="hist"><b>Histórico do adesivo</b>';
     for (var i = 0; i < v.historico.length; i++) {
       var x = v.historico[i];
-      h += '<div>' + (x.tipo === 'aplicacao' ? 'Aplicação' : 'Renovação') + ' em ' + dBr(x.data) + (supNome(x.supervisor_id) ? ' · ' + esc(supNome(x.supervisor_id)) : '') + (x.foto_url ? ' · <a href="' + esc(x.foto_url) + '" target="_blank" rel="noopener">foto</a>' : '') + '</div>';
+      h += '<div>' + ({ aplicacao: 'Aplicação', renovacao: 'Renovação', motorista: 'Outro motorista registrado', repetido: 'Registro repetido' }[x.tipo] || x.tipo) + ' em ' + dBr(x.data) + (supNome(x.supervisor_id) ? ' · ' + esc(supNome(x.supervisor_id)) : '') + (x.foto_url ? ' · <a href="' + esc(x.foto_url) + '" target="_blank" rel="noopener">foto</a>' : '') + '</div>';
     }
     h += '</div>';
   }
@@ -365,7 +372,8 @@ function detalheVeiculo(v){
       + '<div><label for="e-vcat">Categoria</label><select id="e-vcat">' + (v.categoria ? '' : '<option value="" selected>Escolha…</option>') + ['taxista', 'uber'].map(function(c){ return '<option value="' + c + '"' + (c === v.categoria ? ' selected' : '') + '>' + CAT_VEICULO[c] + '</option>'; }).join('') + '</select></div>'
       + '<div><label for="e-placa">Placa</label><input type="text" id="e-placa" value="' + esc(fmtPlaca(v.placa)) + '"></div>'
       + '<div><label for="e-modelo">Modelo</label><input type="text" id="e-modelo" value="' + esc(v.modelo) + '"></div></div>'
-      + '<p class="dica">A data do adesivo não é editada aqui: ela só muda quando o motorista registra uma aplicação ou renovação com foto.</p>'
+      + '<div class="cheio" style="margin-top:8px"><label>Foto do adesivo</label><label class="bt-cinza bt-mini" style="display:inline-block;cursor:pointer" for="e-foto">📷 Trocar foto</label> <span id="e-foto-txt" class="dica"></span><input type="file" id="e-foto" accept="image/*" style="display:none"></div>'
+      + '<p class="dica">A data do adesivo não é editada aqui: ela só muda quando o motorista registra uma aplicação ou renovação com foto. Trocar a foto não muda a data.</p>'
       + '<div class="acoes"><button class="bt-mar bt-mini" data-salvarv="' + v.id + '">Salvar</button><button class="bt-cinza bt-mini" data-cancelar="1">Cancelar</button></div>';
   } else {
     h += '<div class="acoes">'
@@ -374,6 +382,21 @@ function detalheVeiculo(v){
       + '<button class="bt-link bt-mini" data-excluirv="' + v.id + '">Excluir veículo</button></div>';
   }
   return h + '</div>';
+}
+
+function nomesCarro(v){ return v.motoristas && v.motoristas.length ? v.motoristas.map(function(m){ return m.nome; }).join(' · ') : v.nome; }
+
+// Reduz a foto no aparelho (como no formulário do adesivo) antes de enviar
+function reduzirFoto(arq, cb){
+  var url = URL.createObjectURL(arq), img = new Image();
+  img.onload = function(){
+    var MAX = 1600, w = img.naturalWidth, h = img.naturalHeight, f = Math.min(1, MAX / Math.max(w, h));
+    var c = document.createElement('canvas'); c.width = Math.round(w * f); c.height = Math.round(h * f);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+    c.toBlob(function(b){ cb(b || null); }, 'image/jpeg', 0.82);
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); cb(null); };
+  img.src = url;
 }
 
 // --------------------------------------------------------- renovações ---
@@ -393,7 +416,7 @@ function linhasRenov(lista){
   var h = '';
   for (var i = 0; i < lista.length; i++) {
     var v = lista[i];
-    h += '<div class="linha"><div class="txt"><div class="tit">' + esc(v.nome) + ' · ' + esc(fmtPlaca(v.placa)) + '</div>'
+    h += '<div class="linha"><div class="txt"><div class="tit">' + esc(nomesCarro(v)) + ' · ' + esc(fmtPlaca(v.placa)) + '</div>'
       + '<div class="sub">' + esc(textoVenc(v.dias)) + ' (' + dBr(v.vencimento) + ') · ' + esc(fmtTel(v.telefone)) + (v.parceiro ? '' : ' · sem cadastro do vale') + '</div></div>'
       + '<a class="bt-mini zap" style="text-decoration:none" href="' + linkZap(v.telefone, msgZap(v)) + '" target="_blank" rel="noopener">Avisar</a></div>';
   }
@@ -571,12 +594,27 @@ function ligar(){
   if (svv) {
     var v = acha(D.veiculos, EDIT);
     mascaraTel(document.getElementById('e-tel')); mascaraPlaca(document.getElementById('e-placa'));
+    var inFoto = document.getElementById('e-foto');
+    if (inFoto) inFoto.onchange = function(){
+      var arq = inFoto.files && inFoto.files[0]; if (!arq) return;
+      var txt = document.getElementById('e-foto-txt'); txt.textContent = 'Preparando a foto…';
+      reduzirFoto(arq, function(blob){
+        if (!blob) { txt.textContent = 'Não consegui ler essa foto. Tente outra.'; return; }
+        if (!confirm('Trocar a foto do adesivo de ' + v.nome + '? A foto atual é apagada e a data do adesivo continua a mesma.')) { txt.textContent = ''; inFoto.value = ''; return; }
+        txt.textContent = 'Enviando…';
+        var fd = new FormData(); fd.append('foto', blob, 'adesivo.jpg');
+        fetch(API + '/veiculos/' + v.id + '/foto', { method: 'POST', headers: { 'x-perfil': SESSAO.perfil, 'x-pin': SESSAO.pin }, body: fd })
+          .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.erro || 'Erro'); }); })
+          .then(function(){ EDIT = null; toast('Foto trocada.'); carregar(); })
+          .catch(function(e){ txt.textContent = e.message; });
+      });
+    };
     svv.onclick = function(){
       var cat = document.getElementById('e-vcat').value;
       if (!cat) { toast('Escolha se é taxista ou motorista de aplicativo.'); return; }
       var dados = { nome: document.getElementById('e-nome').value, telefone: document.getElementById('e-tel').value, placa: document.getElementById('e-placa').value, modelo: document.getElementById('e-modelo').value, categoria: cat };
       svv.disabled = true;
-      apiAuth('/veiculos/' + v.id, { method: 'POST', body: dados }).then(function(){ EDIT = null; toast('Veículo corrigido.'); carregar(); }).catch(function(e){ svv.disabled = false; if (e.message !== '401') toast(e.message); });
+      apiAuth('/veiculos/' + v.id, { method: 'POST', body: dados }).then(function(r){ EDIT = null; toast(r.vale_criado ? 'Veículo corrigido e cadastro do vale criado.' : 'Veículo corrigido.'); carregar(); }).catch(function(e){ svv.disabled = false; if (e.message !== '401') toast(e.message); });
     };
   }
   var ex = box.querySelector('[data-excluir]');
@@ -585,10 +623,16 @@ function ligar(){
     if (!confirm('Excluir o cadastro de ' + p.nome + '? Ele sai do vale e só volta se fizer o cadastro de novo. Os almoços já liberados ficam no relatório.')) return;
     apiAuth('/parceiros/' + p.id, { method: 'DELETE' }).then(function(){ ABERTO = null; toast('Cadastro excluído.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
   };
+  var rcs = box.querySelectorAll('[data-removercarro]');
+  for (var rc = 0; rc < rcs.length; rc++) rcs[rc].onclick = function(){
+    var id = this.getAttribute('data-removercarro'), nome = this.getAttribute('data-nome');
+    if (!confirm('Tirar ' + nome + ' deste carro? O cadastro dele continua, mas fica pendente até registrar o adesivo em outro carro pelo QR do supervisor.')) return;
+    apiAuth('/parceiros/' + id + '/remover-carro', { method: 'POST', body: {} }).then(function(){ toast(nome + ' removido do carro.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
+  };
   var exv = box.querySelector('[data-excluirv]');
   if (exv) exv.onclick = function(){
     var v = acha(D.veiculos, this.getAttribute('data-excluirv'));
-    if (!confirm('Excluir o veículo ' + fmtPlaca(v.placa) + ' de ' + v.nome + '? As fotos e o histórico do adesivo são apagados, e o vale dele fica pendente.')) return;
+    if (!confirm('Excluir o veículo ' + fmtPlaca(v.placa) + '? As fotos e o histórico do adesivo são apagados, e o vale de quem usa esse carro fica pendente.')) return;
     apiAuth('/veiculos/' + v.id, { method: 'DELETE' }).then(function(){ ABERTO = null; toast('Veículo excluído.'); carregar(); }).catch(function(e){ if (e.message !== '401') toast(e.message); });
   };
 

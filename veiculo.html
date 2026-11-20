@@ -104,6 +104,8 @@ function resultado(r){
     + '<p>Seu veículo foi registrado e o adesivo de parceiro Tôa Tôa está confirmado.<br>Esse acompanhamento acontece periodicamente.</p>'
     + '<p>Obrigado pela parceria e por fazer parte do Tôa Tôa! 💛</p>'
     + '<p class="dica" style="margin-top:14px">Veículo ' + esc(fmtPlaca(r.placa)) + ' · ' + esc(CAT_VEICULO[r.categoria] || '') + ' · adesivo válido até ' + dBr(r.vencimento) + '</p>';
+  if (r.tipo === 'motorista') h += '<p class="dica">Você entrou como motorista deste carro, que já tem o adesivo registrado' + (r.motoristas && r.motoristas.length ? ' por ' + esc(r.motoristas.join(', ')) : '') + '. O adesivo continua valendo até ' + dBr(r.vencimento) + '.</p>';
+  if (r.motoristas && r.motoristas.length) h += '<p class="dica"><b>Atenção:</b> é 1 almoço por dia por carro. Se ' + esc(r.motoristas.join(' ou ')) + ' já tiver almoçado no dia, o vale não é liberado para você.</p>';
   if (!r.vale) {
     var q = 's=' + encodeURIComponent(COD) + '&nome=' + encodeURIComponent(r.nome) + '&tel=' + encodeURIComponent(r.telefone) + '&placa=' + encodeURIComponent(r.placa) + '&cat=' + encodeURIComponent(r.categoria || CAT);
     h += '<p style="margin-top:14px">Falta só o cadastro do vale refeição, com este mesmo telefone e placa.</p>'
@@ -113,7 +115,7 @@ function resultado(r){
   } else if (r.vale.telefone_diferente) {
     h += '<p class="dica">Seu cadastro do vale está com outro telefone. Peça ao supervisor para corrigir para ' + esc(fmtTel(r.telefone)) + '.</p>';
   } else if (r.vale.placa_diferente) {
-    h += '<p class="dica">Seu cadastro do vale está com outra placa. Peça ao supervisor para corrigir para ' + esc(fmtPlaca(r.placa)) + '.</p>';
+    h += '<p class="dica"><b>Atenção:</b> este telefone já está no cadastro do vale de <b>' + esc(r.vale.nome) + '</b>, com o carro ' + esc(fmtPlaca(r.vale.placa)) + '. Se for você e trocou de carro, o supervisor corrige a placa no painel; se o telefone foi digitado errado, peça ao supervisor para corrigir.</p>';
   } else if (r.vale.status === 'ativo') {
     h += '<p class="dica">Seu vale refeição está ativo. Na hora do almoço, o caixa libera e entrega o seu vale.</p>';
   } else {

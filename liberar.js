@@ -182,9 +182,9 @@ function render(){
     h = '<div class="res">';
     for (var j = 0; j < RES.length; j++) {
       var p = RES[j];
-      h += '<div class="linha clic' + (p.almocou_em ? ' ja' : '') + '" data-sel="' + p.id + '" role="button" tabindex="0">'
-        + '<div class="txt"><div class="tit">' + esc(p.nome) + '</div><div class="sub">' + esc(CATEGORIAS[p.categoria] || p.categoria) + (p.placa ? ' · ' + esc(fmtPlaca(p.placa)) : '') + ' · ' + esc(fmtTel(p.telefone)) + (p.setor ? ' · ' + esc(p.setor) : '') + '</div></div>'
-        + (p.almocou_em ? '<span class="pill neutro">já almoçou</span>' : pillStatus(p.status)) + '<span class="chev">›</span></div>';
+      h += '<div class="linha clic' + (p.almocou_em || p.carro_almocou ? ' ja' : '') + '" data-sel="' + p.id + '" role="button" tabindex="0">'
+        + '<div class="txt"><div class="tit">' + esc(p.nome) + '</div><div class="sub">' + esc(CATEGORIAS[p.categoria] || p.categoria) + (p.placa ? ' · ' + esc(fmtPlaca(p.placa)) : '') + ' · ' + esc(fmtTel(p.telefone)) + (p.setor ? ' · ' + esc(p.setor) : '') + (p.colegas && p.colegas.length ? ' · divide o carro com ' + esc(p.colegas.join(', ')) : '') + '</div></div>'
+        + (p.almocou_em ? '<span class="pill neutro">já almoçou</span>' : p.carro_almocou ? '<span class="pill neutro">carro já almoçou</span>' : pillStatus(p.status)) + '<span class="chev">›</span></div>';
     }
     h += '</div>';
   }
@@ -202,9 +202,12 @@ function htmlVeredito(p){
     cls = 'ja'; frase = 'Já almoçou hoje às ' + horaBR(p.almocou_em);
     expl = 'É 1 almoço por dia. Não entregue outro vale.';
     acao = '<button class="bt-link" data-desfazer="' + p.id + '">Lançado errado? Desfazer</button>';
+  } else if (p.carro_almocou) {
+    cls = 'ja'; frase = 'O carro já almoçou hoje';
+    expl = 'O almoço de hoje do ' + fmtPlaca(p.placa) + ' foi liberado para ' + p.carro_almocou.nome + ' às ' + horaBR(p.carro_almocou.hora) + '. É 1 almoço por dia por carro, mesmo com mais de um motorista. Não entregue outro vale.';
   } else if (p.status === 'ativo') {
     cls = 'ativo'; frase = 'Pode almoçar';
-    expl = (p.vencimento ? 'Adesivo válido até ' + dBr(p.vencimento) + (p.dias <= 15 ? ' · ' + textoVenc(p.dias) : '') + '. ' : 'Cadastro ativo. ') + 'Libere e entregue o vale.';
+    expl = (p.vencimento ? 'Adesivo válido até ' + dBr(p.vencimento) + (p.dias <= 15 ? ' · ' + textoVenc(p.dias) : '') + '. ' : 'Cadastro ativo. ') + 'Libere e entregue o vale.' + (p.colegas && p.colegas.length ? ' Divide o carro com ' + p.colegas.join(', ') + ': é 1 almoço por dia por carro.' : '');
     if (foraDoPadrao(p.categoria)) acao += '<div class="padrao">' + esc(CATEGORIAS[p.categoria] || p.categoria) + ' normalmente é liberado pelo ' + OUTRA + '. Libere só se for o caso.</div>';
     acao += '<button class="bt-grande" data-liberar="' + p.id + '">Liberar almoço de hoje</button>';
   } else if (p.status === 'renovacao') {
